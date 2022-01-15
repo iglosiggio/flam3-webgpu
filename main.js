@@ -203,10 +203,14 @@ fn fragment_main([[builtin(position)]] pos: vec4<f32>) -> [[location(0)]] vec4<f
 const init = async canvas => {
   if (navigator.gpu === undefined) {
     console.error('WebGPU is not supported (or not enabled)')
-    document.getElementById('webgpu-error').style = ''
+    document.getElementById('webgpu-not-supported-error').style = ''
     return
   }
   const adapter = await navigator.gpu.requestAdapter()
+  if (adapter === null) {
+    console.error('No WebGPU device is available')
+    document.getElementById('webgpu-no-device-error').style = ''
+  }
   const device = await adapter.requestDevice()
 
   const context = canvas.getContext('webgpu')
@@ -462,7 +466,7 @@ const init = async canvas => {
       })
       passEncoder.setBindGroup(0, bindGroup)
       passEncoder.setPipeline(addPointsPipeline)
-      passEncoder.dispatch(100)
+      passEncoder.dispatch(10000)
       passEncoder.endPass()
       commandBuffers.push(commandEncoder.finish())
     }
