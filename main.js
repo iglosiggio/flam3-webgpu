@@ -9,9 +9,20 @@
 ///   3. Gather the maximum value
 ///   4. Plot on the log-density display
 
-const code = `
-[[block]] struct Histogram {
-    data: array<atomic<u32>>;
+const common_code = `
+[[block]] struct Stage1Histogram {
+  max: atomic<u32>;
+  data: array<atomic<u32>>;
+};
+
+[[block]] struct Stage2Histogram {
+  max: atomic<u32>;
+  data: array<u32>;
+};
+
+[[block]] struct FragmentHistogram {
+  max: u32;
+  data: array<u32>;
 };
 
 [[block]] struct CanvasConfiguration {
@@ -40,7 +51,9 @@ struct Variation {
   variations: array<Variation>;
 };
 
-[[group(0), binding(0)]] var<storage, read_write> buffer: Histogram;
+[[group(0), binding(0)]] var<storage, read_write> stage1_histogram: Stage1Histogram;
+[[group(0), binding(0)]] var<storage, read_write> stage2_histogram: Stage2Histogram;
+[[group(0), binding(0)]] var<storage, read> fragment_histogram: FragmentHistogram;
 [[group(0), binding(1)]] var<storage, read> fractal: Fractal;
 [[group(0), binding(2)]] var<uniform> config: CanvasConfiguration;
 
@@ -111,13 +124,37 @@ fn plot(p: vec2<f32>) {
       u32((p.y + 1.) / 2. * f32(config.dimensions.y))
     );
     let offset = ipoint.y * config.dimensions.x + ipoint.x;
-    atomicAdd(&buffer.data[offset], 1u);
+    atomicAdd(&stage1_histogram.data[offset], 1u);
   }
 }
+`
 
+const histogram_max_wgsl = `
+${common_code}
+[[stage(compute), workgroup_size(1)]]
+fn histogram_max(
+  [[builtin(global_invocation_id)]] invocation: vec3<u32>,
+  [[builtin(num_workgroups)]] invocation_size: vec3<u32>
+) {
+  // We are only using 1D invocations for now so...
+  let CANVAS_SIZE = config.dimensions.x * config.dimensions.y;
+  let BLOCK_SIZE = (CANVAS_SIZE + invocation_size.x - 1u) / invocation_size.x;
+  let ITERATION_SIZE = min(BLOCK_SIZE * invocation.x + 1u, CANVAS_SIZE);
+  var invocation_max: u32 = 0x0u;
+
+  for (var i = BLOCK_SIZE * invocation.x; i < ITERATION_SIZE; i = i + 1u) {
+    invocation_max = max(invocation_max, stage2_histogram.data[i]);
+  }
+
+  atomicMax(&stage2_histogram.max, invocation_max);
+}
+`
+
+const add_points_wgsl = `
+${common_code}
 // FIXME: Tune the workgroup size
 [[stage(compute), workgroup_size(1)]]
-fn compute_main(
+fn add_points(
   [[builtin(global_invocation_id)]] invocation: vec3<u32>
 ) {
   seed(hash(config.frame) ^ hash(invocation.x));
@@ -132,7 +169,10 @@ fn compute_main(
     plot(point);
   }
 }
+`
 
+const render_wgsl = `
+${common_code}
 [[stage(vertex)]]
 fn vertex_main([[builtin(vertex_index)]] VertexIndex : u32) -> [[builtin(position)]] vec4<f32> {
   var pos = array<vec2<f32>, 4>(  
@@ -153,9 +193,9 @@ fn fragment_main([[builtin(position)]] pos: vec4<f32>) -> [[location(0)]] vec4<f
     u32(pos.y)
   );
   let i = point.y * config.dimensions.y + point.x;
-  //return vec4<f32>(1.0, abs(sin(f32(atomicLoad(&buffer.data[i])) / 40000.0)), 0.0, 1.0);
-  let result = f32(atomicLoad(&buffer.data[i]));
-  let logresult = log(result)/10.0;
+  //return vec4<f32>(1.0, abs(sin(f32(fragment_histogram.data[i]) / 40000.0)), 0.0, 1.0);
+  let result = f32(fragment_histogram.data[i]);
+  let logresult = log(result)/log(f32(fragment_histogram.max));
   return vec4<f32>(logresult, logresult, logresult, 1.0);
 }
 `
@@ -184,13 +224,21 @@ const init = async canvas => {
     size: presentationSize
   })
 
-  const module = device.createShaderModule({
-      label: 'FLAM3 main shader',
-      code
+  const add_points_module = device.createShaderModule({
+      label: 'FLAM3 > Module > Add Points',
+      code: add_points_wgsl
+  })
+  const histogram_max_module = device.createShaderModule({
+      label: 'FLAM3 > Module > Hisogram Max',
+      code: histogram_max_wgsl
+  })
+  const render_module = device.createShaderModule({
+      label: 'FLAM3 > Module > Render',
+      code: render_wgsl
   })
 
   const bindGroupLayout = device.createBindGroupLayout({
-      label: 'FLAM3 - Bind Group Layout',
+      label: 'FLAM3 > Bind Group Layout',
       entries: [
         {
           binding: 0,
@@ -211,74 +259,83 @@ const init = async canvas => {
   })
 
   const layout = device.createPipelineLayout({
-    label: 'FLAM3 - Pipeline Layout',
+    label: 'FLAM3 > Pipeline Layout',
     bindGroupLayouts: [bindGroupLayout]
   })
 
   const histogramBuffer = device.createBuffer({
-    label: 'FLAM3 - Histogram Buffer',
-    size: 4 * 900 * 900,
+    label: 'FLAM3 > Buffer > Histogram',
+    size: 4 + 4 * 900 * 900,
     usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST
   })
   const fractalBuffer = device.createBuffer({
-    label: 'FLAM3 - Fractal Buffer',
+    label: 'FLAM3 > Buffer > Fractal',
     size: 4 + 28 * 128,
     usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST
   })
   const configBuffer = device.createBuffer({
-    label: 'FLAM3 - Configuration Buffer',
+    label: 'FLAM3 > Buffer > Configuration',
     size: 24,
     usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST
   })
 
   const bindGroup = device.createBindGroup({
-    label: 'FLAM3 - Group Binding',
+    label: 'FLAM3 > Group Binding',
     layout: bindGroupLayout,
     entries: [
       {
         binding: 0,
         resource: {
-          label: 'FLAM3 - Histogram Binding',
+          label: 'FLAM3 > Binding > Histogram',
           buffer: histogramBuffer
         }
       },
       {
         binding: 1,
         resource: {
-          label: 'FLAM3 - Fractal Binding',
+          label: 'FLAM3 > Binding > Fractal',
           buffer: fractalBuffer
         }
       },
       {
         binding: 2,
         resource: {
-          label: 'FLAM3 - Configuration Binding',
+          label: 'FLAM3 > Binding > Configuration',
           buffer: configBuffer
         }
       }
     ]
   })
 
-  const computePipeline = await device.createComputePipelineAsync({
-      label: 'FLAM3 - Generate',
+  const addPointsPipeline = await device.createComputePipelineAsync({
+      label: 'FLAM3 > Pipeline > Add points',
       layout,
       compute: {
-          module,
-          entryPoint: 'compute_main'
+          module: add_points_module,
+          entryPoint: 'add_points'
+      },
+  })
+
+  const histogramMaxPipeline = await device.createComputePipelineAsync({
+      label: 'FLAM3 > Pipeline > Histogram Max',
+      layout,
+      compute: {
+          module: histogram_max_module,
+          entryPoint: 'histogram_max'
       },
   })
 
   const renderPipeline = await device.createRenderPipelineAsync({
-    label: 'FLAM3 - Render',
+    label: 'FLAM3 > Pipeline > Render',
     layout,
     vertex: {
       layout,
-      module,
+      module: render_module,
       entryPoint: 'vertex_main',
     },
     fragment: {
       layout,
-      module,
+      module: render_module,
       entryPoint: 'fragment_main',
       targets: [{ format }]
     },
@@ -401,11 +458,24 @@ const init = async canvas => {
     {
       const commandEncoder = device.createCommandEncoder()
       const passEncoder = commandEncoder.beginComputePass({
-        label: 'FLAM3 - Compute Pass'
+        label: 'FLAM3 > Pass > Add points'
       })
       passEncoder.setBindGroup(0, bindGroup)
-      passEncoder.setPipeline(computePipeline)
-      passEncoder.dispatch(10000)
+      passEncoder.setPipeline(addPointsPipeline)
+      passEncoder.dispatch(100)
+      passEncoder.endPass()
+      commandBuffers.push(commandEncoder.finish())
+    }
+
+    // Find the max of the histogram
+    {
+      const commandEncoder = device.createCommandEncoder()
+      const passEncoder = commandEncoder.beginComputePass({
+        label: 'FLAM3 > Pass > Histogram Max'
+      })
+      passEncoder.setBindGroup(0, bindGroup)
+      passEncoder.setPipeline(histogramMaxPipeline)
+      passEncoder.dispatch(1000)
       passEncoder.endPass()
       commandBuffers.push(commandEncoder.finish())
     }
@@ -414,7 +484,7 @@ const init = async canvas => {
     {
       const commandEncoder = device.createCommandEncoder()
       const passEncoder = commandEncoder.beginRenderPass({
-        label: 'FLAM3 - Render Pass',
+        label: 'FLAM3 > Pass > Render',
         colorAttachments: [{
           view: context.getCurrentTexture().createView(),
           loadValue: { r: 0.0, g: 0.0, b: 0.0, a: 1.0 },
