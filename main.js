@@ -29,6 +29,7 @@ const common_code = `
   origin: vec2<f32>;
   dimensions: vec2<u32>;
   frame: u32;
+  zoom: f32;
 };
 
 // FIXME: Use a mat3x3
@@ -98,7 +99,7 @@ fn sinusoidal(p: vec2<f32>) -> vec2<f32> {
   return vec2<f32>(sin(p.x), sin(p.y));
 }
 
-let EYEFISN_FN = 27u;
+let EYEFISH_FN = 27u;
 fn eyefish(p: vec2<f32>) -> vec2<f32> {
   let v = 2.0 / (length(p) + 1.0);
   return v * p;
@@ -125,7 +126,7 @@ fn next(p: vec2<f32>) -> vec2<f32> {
 }
 
 fn plot(v: vec2<f32>) {
-  let p = v / 3.0;
+  let p = (v - config.origin) * config.zoom;
   if (-1. <= p.x && p.x < 1. && -1. <= p.y && p.y < 1.) {
     let ipoint = vec2<u32>(
       u32((p.x + 1.) / 2. * f32(config.dimensions.x)),
@@ -376,10 +377,15 @@ const init = async (canvas, starts_running = true) => {
     _frame = new Uint32Array(this.buffer, 16, 1)
     get frame()      { return this._frame[0] }
     set frame(value) { return this._frame[0] = value }
+
+    _zoom = new Float32Array(this.buffer, 20, 1)
+    get zoom()      { return this._zoom[0] }
+    set zoom(value) { return this._zoom[0] = value }
   }
   const config = window.config = new Config
   config.width = canvas.width
   config.height = canvas.height
+  config.zoom = 1
 
   const VARIATION_SIZE = 28
   const fn_id_to_str_entries = [
@@ -553,6 +559,7 @@ const init = async (canvas, starts_running = true) => {
 
   return {
     fractal,
+    config,
     get isRunning() { return running },
     stop()  { running = false },
     start() { running = true; frame() },
