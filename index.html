@@ -5,12 +5,64 @@
         <script type="module" src="main.js">
         </script>
         <meta http-equiv="origin-trial" content="Athxt2w9w8TlIoxz7sUGbJxSP3CxVd1k92JUkY07sUajpbpVhPBjYt/N3lHPr77aRO+LQDCruKyh4hiJ6xYf8woAAABUeyJvcmlnaW4iOiJodHRwczovL2lnbG9zaWdnaW8uZ2l0aHViLmlvOjQ0MyIsImZlYXR1cmUiOiJXZWJHUFUiLCJleHBpcnkiOjE2NTI4MzE5OTl9">
+        <style>
+            variation-editor {
+                display: inline-block;
+                margin: 0em  1em;
+            }
+        </style>
     </head>
     <body>
+        <template id="variation-editor-template">
+            Tipo: <slot name="variation">UNKNOWN_VARIATION</slot><br/>
+            Transformación: <table>
+                <tr>
+                    <td><slot name="a">a</slot></td>
+                    <td><slot name="b">b</slot></td>
+                </tr>
+                <tr>
+                    <td><slot name="d">d</slot></td>
+                    <td><slot name="e">e</slot></td>
+                </tr>
+            </table>
+            Traslación: (<slot name="c">c</slot>, <slot name="f">f</slot>)
+        </template>
         <h1 id="webgpu-not-supported-error" style="display: none;">WebGPU support was not detected</h1>
         <h1 id="webgpu-no-device-error" style="display: none;">No WebGPU device is available</h1>
         <canvas id="output" width="900" height="900">
             Sorry, your browser has no canvas support
         </canvas>
+        <button onclick="flam3.start()" id="flam3-start">Start</button>
+        <button onclick="flam3.stop()"  id="flam3-stop">Stop</button>
+        <button onclick="flam3.step()"  id="flam3-step">Step</button>
+        <button onclick="flam3.clear()" id="flam3-clear">Clear</button><br/>
+        <div id="fractal-editor">
+
+        </div>
+        <script type="text/javascript">
+            customElements.define('variation-editor',
+              class extends HTMLElement {
+                constructor() {
+                  super();
+                  const template = document
+                    .getElementById('variation-editor-template')
+                    .content;
+                  this.attachShadow({mode: 'open'})
+                      .appendChild(template.cloneNode(true));
+              }
+            });
+
+            function add_variation_editor() {
+                const elem = document.createElement('variation-editor')
+                const slots = ['variation', 'a', 'b', 'c', 'd', 'e', 'f']
+                for (const slot_name of slots) {
+                    const slot_elem = document.createElement('span')
+                    slot_elem.slot = slot_name
+                    elem.appendChild(slot_elem)
+                }
+                document.getElementById('fractal-editor').appendChild(elem)
+                return elem
+            }
+        </script>
     </body>
 </html>

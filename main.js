@@ -98,10 +98,17 @@ fn sinusoidal(p: vec2<f32>) -> vec2<f32> {
   return vec2<f32>(sin(p.x), sin(p.y));
 }
 
+let EYEFISN_FN = 27u;
+fn eyefish(p: vec2<f32>) -> vec2<f32> {
+  let v = 2.0 / (length(p) + 1.0);
+  return v * p;
+}
+
 fn apply_fn(fn_id: u32, p: vec2<f32>) -> vec2<f32> {
   switch (fn_id) {
-    case 0u: { return linear(p);     }
-    case 1u: { return sinusoidal(p); }
+    case  0u: { return linear(p);     }
+    case  1u: { return sinusoidal(p); }
+    case 27u: { return eyefish(p); }
     default: {}
   }
   // Dumb and unreachable
@@ -117,7 +124,8 @@ fn next(p: vec2<f32>) -> vec2<f32> {
   return apply_variation(fractal.variations[i], p);
 }
 
-fn plot(p: vec2<f32>) {
+fn plot(v: vec2<f32>) {
+  let p = v / 3.0;
   if (-1. <= p.x && p.x < 1. && -1. <= p.y && p.y < 1.) {
     let ipoint = vec2<u32>(
       u32((p.x + 1.) / 2. * f32(config.dimensions.x)),
@@ -200,7 +208,7 @@ fn fragment_main([[builtin(position)]] pos: vec4<f32>) -> [[location(0)]] vec4<f
 }
 `
 
-const init = async canvas => {
+const init = async (canvas, starts_running = true) => {
   if (navigator.gpu === undefined) {
     console.error('WebGPU is not supported (or not enabled)')
     document.getElementById('webgpu-not-supported-error').style = ''
@@ -267,9 +275,10 @@ const init = async canvas => {
     bindGroupLayouts: [bindGroupLayout]
   })
 
+  const HISTOGRAM_BUFFER_SIZE = 4 + 4 * 900 * 900
   const histogramBuffer = device.createBuffer({
     label: 'FLAM3 > Buffer > Histogram',
-    size: 4 + 4 * 900 * 900,
+    size: HISTOGRAM_BUFFER_SIZE,
     usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST
   })
   const fractalBuffer = device.createBuffer({
@@ -373,46 +382,74 @@ const init = async canvas => {
   config.height = canvas.height
 
   const VARIATION_SIZE = 28
-  const fn_id_to_str = new Map([
+  const fn_id_to_str_entries = [
     [0, 'linear'],
-    [1, 'sinusoidal']
-  ])
-  const str_to_fn_id = new Map([
-    ['linear', 0],
-    ['sinusoidal', 1]
-  ])
+    [1, 'sinusoidal'],
+    [27, 'eyefish']
+  ];
+  const fn_id_to_str = new Map(fn_id_to_str_entries)
+  const str_to_fn_id = new Map(fn_id_to_str_entries.map(([a, b]) => [b, a]))
   class Variation {
-    constructor(buffer, offset) {
+    constructor(buffer, offset, element) {
       this._fn_id = new Uint32Array(buffer, offset, 1)
       this._affine_transform = new Float32Array(buffer, offset + 4, 6)
+
+      if (element)
+        [
+          this._fn_id_element,
+          this._a_element,
+          this._b_element,
+          this._c_element,
+          this._d_element,
+          this._e_element,
+          this._f_element
+        ] = element.querySelectorAll('[slot]')
     }
 
     get fn_id() {
       const id = this._fn_id[0]
       const result = fn_id_to_str.get(id)
-      if (result === undefined)
-        throw new Error(`Unknown fn_id "${id}"`)
+      if (result === undefined) throw new Error(`Unknown fn_id "${id}"`)
+      return result
     }
 
     set fn_id(value) {
       const id = str_to_fn_id.get(value)
-      if (id === undefined)
-        throw new Error(`Unknown fn_id string "${value}"`)
+      if (id === undefined) throw new Error(`Unknown fn_id string "${value}"`)
+      if (this._fn_id_element) this._fn_id_element.textContent = value
       this._fn_id[0] = id
     }
 
     get a()      { return this._affine_transform[0] }
-    set a(value) { return this._affine_transform[0] = value }
     get b()      { return this._affine_transform[1] }
-    set b(value) { return this._affine_transform[1] = value }
     get c()      { return this._affine_transform[2] }
-    set c(value) { return this._affine_transform[2] = value }
     get d()      { return this._affine_transform[3] }
-    set d(value) { return this._affine_transform[3] = value }
     get e()      { return this._affine_transform[4] }
-    set e(value) { return this._affine_transform[4] = value }
     get f()      { return this._affine_transform[5] }
-    set f(value) { return this._affine_transform[5] = value }
+    set a(value) {
+      this._affine_transform[0] = value
+      if (this._a_element) this._a_element.textContent = value
+    }
+    set b(value) {
+      this._affine_transform[1] = value
+      if (this._b_element) this._b_element.textContent = value
+    }
+    set c(value) {
+      this._affine_transform[2] = value
+      if (this._c_element) this._c_element.textContent = value
+    }
+    set d(value) {
+      this._affine_transform[3] = value
+      if (this._d_element) this._d_element.textContent = value
+    }
+    set e(value) {
+      this._affine_transform[4] = value
+      if (this._e_element) this._e_element.textContent = value
+    }
+    set f(value) {
+      this._affine_transform[5] = value
+      if (this._f_element) this._f_element.textContent = value
+    }
   }
 
   const MAX_VARIATIONS = 128
@@ -426,13 +463,15 @@ const init = async canvas => {
     at(idx) {
       if (idx < 0 || this.length <= idx)
         throw new Error('Index out of bounds!')
-      return new Variation(this.buffer, 4 + VARIATION_SIZE * idx)
+      return this[idx]
     }
 
     add(fn_id, a, b, c, d, e, f) {
       if (this.length === MAX_VARIATIONS)
         throw new Error('Variations limit exceeded!')
-      const variation = new Variation(this.buffer, 4 + VARIATION_SIZE * this.length++)
+      const editor = add_variation_editor()
+      const variation = this[this.length] = new Variation(this.buffer, 4 + VARIATION_SIZE * this.length, editor)
+      this.length++
       if (fn_id !== undefined) variation.fn_id = fn_id
       if (a     !== undefined) variation.a     = a
       if (b     !== undefined) variation.b     = b
@@ -444,12 +483,16 @@ const init = async canvas => {
     }
   }
   const fractal = new Fractal
-  fractal.add('sinusoidal', 0.5,  0.0,  0.5,  0.0, 0.5,  0.5)
-  fractal.add('sinusoidal', 0.5,  0.0, -0.5,  0.0, 0.5,  0.5)
-  fractal.add('sinusoidal', 0.5,  0.0,  0.0,  0.0, 0.5, -0.5)
-  fractal.add('linear',     0.0,  0.8,  0.0,  0.6, 0.0,  0.0)
-  fractal.add('linear',     0.0, -0.8,  0.0, -0.6, 0.0,  0.0)
+  //fractal.add('sinusoidal', 0.5,  0.0,  0.5,  0.0, 0.5,  0.5)
+  //fractal.add('sinusoidal', 0.5,  0.0, -0.5,  0.0, 0.5,  0.5)
+  //fractal.add('sinusoidal', 0.5,  0.0,  0.0,  0.0, 0.5, -0.5)
+  //fractal.add('linear',     0.0,  0.8,  0.0,  0.6, 0.0,  0.0)
+  //fractal.add('linear',     0.0, -0.8,  0.0, -0.6, 0.0,  0.0)
+  fractal.add('linear',  0.321637, -0.20418, -0.633718,  0.20418,   0.321637,  1.140693)
+  fractal.add('linear',  0.715673, -0.418864, 0.576108,  0.418864,  0.715673,  0.455125)
+  fractal.add('linear', -0.212317,  0.536045, 0.53578,  -0.536045, -0.212317, -0.743179)
 
+  let running = starts_running
   function frame() {
     // Copy current configuration
     ++config.frame
@@ -503,10 +546,24 @@ const init = async canvas => {
     }
 
     device.queue.submit(commandBuffers)
-    requestAnimationFrame(frame)
+    if (running) requestAnimationFrame(frame)
   }
 
-  requestAnimationFrame(frame)
+  if (running) requestAnimationFrame(frame)
+
+  return {
+    fractal,
+    get isRunning() { return running },
+    stop()  { running = false },
+    start() { running = true; frame() },
+    step()  { frame() },
+    clear() {
+      // FIXME: Clear the canvas
+      device.queue.writeBuffer(histogramBuffer, 0, new ArrayBuffer(HISTOGRAM_BUFFER_SIZE), 0)
+    }
+  }
 };
 
-window.document.body.onload = () => init(document.getElementById('output'))
+window.document.body.onload = async () => {
+  window.flam3 = await init(document.getElementById('output'))
+}
