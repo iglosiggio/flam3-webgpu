@@ -494,14 +494,19 @@ const init = async (canvas, starts_running = true) => {
   //fractal.add('sinusoidal', 0.5,  0.0,  0.0,  0.0, 0.5, -0.5)
   //fractal.add('linear',     0.0,  0.8,  0.0,  0.6, 0.0,  0.0)
   //fractal.add('linear',     0.0, -0.8,  0.0, -0.6, 0.0,  0.0)
-  fractal.add('linear',  0.321637, -0.20418, -0.633718,  0.20418,   0.321637,  1.140693)
-  fractal.add('linear',  0.715673, -0.418864, 0.576108,  0.418864,  0.715673,  0.455125)
-  fractal.add('linear', -0.212317,  0.536045, 0.53578,  -0.536045, -0.212317, -0.743179)
+  fractal.add('eyefish',  0.321636, -0.204179, -0.633718,  0.204179,   0.321637,  1.140693)
+  fractal.add('eyefish',  0.715673, -0.418864, 0.576108,  0.418864,  0.715673,  0.455125)
+  fractal.add('eyefish', -0.212317,  0.536045, 0.53578,  -0.536045, -0.212317, -0.743179)
+  fractal.add('linear', 0.7,  0.0, 0.0,  0.0, 0.7, 0.0)
 
   let running = starts_running
   function frame() {
     // Copy current configuration
     ++config.frame
+    if (should_clear_histogram) {
+      device.queue.writeBuffer(histogramBuffer, 0, new ArrayBuffer(HISTOGRAM_BUFFER_SIZE), 0)
+      should_clear_histogram = false
+    }
     device.queue.writeBuffer(configBuffer, 0, config.buffer, 0)
     device.queue.writeBuffer(fractalBuffer, 0, fractal.buffer, 0)
 
@@ -557,7 +562,8 @@ const init = async (canvas, starts_running = true) => {
 
   if (running) requestAnimationFrame(frame)
 
-  return {
+  let should_clear_histogram = false
+  const flam3 = {
     fractal,
     config,
     get isRunning() { return running },
@@ -566,9 +572,32 @@ const init = async (canvas, starts_running = true) => {
     step()  { frame() },
     clear() {
       // FIXME: Clear the canvas
-      device.queue.writeBuffer(histogramBuffer, 0, new ArrayBuffer(HISTOGRAM_BUFFER_SIZE), 0)
+      should_clear_histogram = true
     }
   }
+
+  // BEGIN UI
+  canvas.onwheel = ev => {
+    ev.preventDefault()
+    flam3.config.zoom *= ev.deltaY < 0 ? 1.1 : 0.9
+    flam3.clear()
+  }
+  canvas.onpointerdown = ev => {
+    canvas.onpointermove = ev => {
+      const cursor_delta_x = -ev.movementX / canvas.width
+      const cursor_delta_y = -ev.movementY / canvas.height
+      flam3.config.x += cursor_delta_x / config.zoom
+      flam3.config.y += cursor_delta_y / config.zoom
+      flam3.clear()
+    }
+    canvas.setPointerCapture(ev.pointerId)
+  }
+  canvas.onpointerup = ev => {
+    canvas.onpointermove = null
+    canvas.releasePointerCapture(ev.pointerId)
+  }
+
+  return flam3
 };
 
 window.document.body.onload = async () => {
