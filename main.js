@@ -849,7 +849,7 @@ const init = async (canvas, starts_running = true) => {
         // Big Circle
         primitives.add({ kind: 1, index: circles.length })
         colors.add({ r: 1.0, g: 0.4, b: 0.1, a: 1.0 })
-        circles.add({ x: xform.a + xform.c, y: xform.d + xform.f, r: 0.018 })
+        circles.add({ x: xform.a + xform.c, y: xform.d + xform.f, r: 0.012 })
         // Small Circle
         primitives.add({ kind: 1, index: circles.length })
         colors.add({ r: 0.0, g: 0.0, b: 0.0, a: 0.0 })
@@ -859,7 +859,7 @@ const init = async (canvas, starts_running = true) => {
         // Big Circle
         primitives.add({ kind: 1, index: circles.length })
         colors.add({ r: 1.0, g: 0.4, b: 0.1, a: 1.0 })
-        circles.add({ x: xform.b + xform.c, y: xform.e + xform.f, r: 0.018 })
+        circles.add({ x: xform.b + xform.c, y: xform.e + xform.f, r: 0.012 })
         // Small Circle
         primitives.add({ kind: 1, index: circles.length })
         colors.add({ r: 0.0, g: 0.0, b: 0.0, a: 0.0 })
@@ -869,11 +869,11 @@ const init = async (canvas, starts_running = true) => {
         // Big Circle
         primitives.add({ kind: 1, index: circles.length })
         colors.add({ r: 1.0, g: 0.4, b: 0.1, a: 1.0 })
-        circles.add({ x: xform.c, y: xform.f, r: 0.03 })
+        circles.add({ x: xform.c, y: xform.f, r: 0.020 })
         // Small Circle
         primitives.add({ kind: 1, index: circles.length })
         colors.add({ r: 1.0, g: 0.4, b: 0.1, a: 0.3 })
-        circles.add({ x: xform.c, y: xform.f, r: 0.025 })
+        circles.add({ x: xform.c, y: xform.f, r: 0.018 })
       }
     }
   }
