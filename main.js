@@ -1,4 +1,4 @@
-/// <reference types="@webgpu/types" />
+/// <reference types='@webgpu/types' />
 /// 2021 - Ignacio E. Losiggio
 /// Originally based on this example: https://austin-eng.com/webgpu-samples/samples/helloTriangle
 /// Original idea: https://flam3.com/flame_draves.pdf
@@ -180,8 +180,7 @@ fn add_points(
 }
 `
 
-const render_wgsl = `
-${common_code}
+const vertex_wgsl =`
 [[stage(vertex)]]
 fn vertex_main([[builtin(vertex_index)]] VertexIndex : u32) -> [[builtin(position)]] vec4<f32> {
   var pos = array<vec2<f32>, 4>(  
@@ -194,7 +193,10 @@ fn vertex_main([[builtin(vertex_index)]] VertexIndex : u32) -> [[builtin(positio
 
   return vec4<f32>(pos[VertexIndex], 0.0, 1.0);
 }
+`
 
+const histogram_fragment_wgsl = `
+${common_code}
 [[stage(fragment)]]
 fn fragment_main([[builtin(position)]] pos: vec4<f32>) -> [[location(0)]] vec4<f32> {
   let point = vec2<u32>(
@@ -206,6 +208,85 @@ fn fragment_main([[builtin(position)]] pos: vec4<f32>) -> [[location(0)]] vec4<f
   let result = f32(fragment_histogram.data[i]);
   let logresult = log(result)/log(f32(fragment_histogram.max));
   return vec4<f32>(logresult, logresult, logresult, 1.0);
+}
+`
+
+const gui_fragment_wgsl = `
+${common_code}
+
+let LINE_KIND = 0u;
+struct LinePrimitive {
+  width: f32;
+  from: vec2<f32>;
+  to: vec2<f32>;
+};
+
+let CIRCLE_KIND = 1u;
+struct CirclePrimitive {
+  center: vec2<f32>;
+  radius: f32;
+};
+
+// Stores the primitive kind
+// The primitive is packed:
+//  * The lower 16 bits denote the type
+//  * The higher 16 bits denote the index
+var<private> primitives: array<u32, 4> = array<u32, 4>(
+  0x00000001u,
+  0x00010001u,
+  0x00000000u,
+  0x00010000u,
+);
+var<private> colors: array<vec4<f32>, 4> = array<vec4<f32>, 4>(
+  vec4<f32>(1.0, 1.0, 1.0, 1.0), // White
+  vec4<f32>(1.0, 0.0, 0.0, 0.5), // Red (Transparent)
+  vec4<f32>(0.0, 1.0, 0.0, 1.0), // Blue
+  vec4<f32>(0.0, 1.0, 1.0, 1.0), // Yellow
+);
+var<private> circles: array<CirclePrimitive, 2> = array<CirclePrimitive, 2>(
+  CirclePrimitive(vec2<f32>(0.0, 0.0), 0.4),
+  CirclePrimitive(vec2<f32>(0.4, -0.2), 0.2),
+);
+var<private> lines: array<LinePrimitive, 2> = array<LinePrimitive, 2>(
+  LinePrimitive(0.05, vec2<f32>(-1.0, -1.0), vec2<f32>(1.0,  1.0)),
+  LinePrimitive(0.10, vec2<f32>(-0.5,  0.8), vec2<f32>(0.6, -0.4)),
+);
+
+[[stage(fragment)]]
+fn fragment_main([[builtin(position)]] screen_pos: vec4<f32>) -> [[location(0)]] vec4<f32> {
+  let dimensions = vec2<f32>(config.dimensions);
+  let normal_pos = (screen_pos.xy / dimensions * -2.0 + vec2<f32>(1.0)) / config.zoom - config.origin;
+  var result = vec4<f32>(0.0); // Black (Transparent)
+
+  for (var i = 0u; i < 4u; i = i + 1u) {
+    let primitive = primitives[i];
+    let primitive_type = primitive & 0x0000FFFFu;
+    let primitive_index = primitive >> 16u;
+    let color = colors[i];
+    switch (primitive_type) {
+      // src: https://iquilezles.org/www/articles/distfunctions2d/distfunctions2d.htm
+      case 0u /* LINE_KIND */: {
+        // FIXME: Improve the names of the variables
+        let line = lines[primitive_index];
+        let line_length: f32 = length(line.to - line.from);
+        let d: vec2<f32> = (line.to - line.from) / line_length;
+        var q: vec2<f32> = normal_pos - (line.from + line.to) * 0.5;
+        q = mat2x2<f32>(d.x, -d.y, d.y, d.x) * q;
+        q = abs(q) - vec2<f32>(line_length, line.width) * 0.5;
+        if (length(max(q, vec2<f32>(0.0))) + min(max(q.x, q.y), 0.0) < 0.0) {
+          result = color;
+        }
+      }
+      case 1u /* CIRCLE_KIND */: {
+        let circle = circles[primitive_index];
+        if (length(normal_pos - circle.center) < circle.radius) {
+          result = color;
+        }
+      }
+      default: {}
+    }
+  }
+  return result;
 }
 `
 
@@ -245,9 +326,17 @@ const init = async (canvas, starts_running = true) => {
       label: 'FLAM3 > Module > Hisogram Max',
       code: histogram_max_wgsl
   })
-  const render_module = device.createShaderModule({
-      label: 'FLAM3 > Module > Render',
-      code: render_wgsl
+  const vertex_module = device.createShaderModule({
+      label: 'FLAM3 > Module > Vertex',
+      code: vertex_wgsl
+  })
+  const histogram_fragment_module = device.createShaderModule({
+      label: 'FLAM3 > Module > Histogram Fragment',
+      code: histogram_fragment_wgsl
+  })
+  const gui_fragment_module = device.createShaderModule({
+      label: 'FLAM3 > Module > Histogram Fragment',
+      code: gui_fragment_wgsl
   })
 
   const bindGroupLayout = device.createBindGroupLayout({
@@ -256,17 +345,17 @@ const init = async (canvas, starts_running = true) => {
         {
           binding: 0,
           visibility: GPUShaderStage.COMPUTE | GPUShaderStage.FRAGMENT,
-          buffer: { type: "storage" }
+          buffer: { type: 'storage' }
         },
         {
           binding: 1,
           visibility: GPUShaderStage.COMPUTE,
-          buffer: { type: "storage" }
+          buffer: { type: 'storage' }
         },
         {
           binding: 2,
           visibility: GPUShaderStage.COMPUTE | GPUShaderStage.VERTEX | GPUShaderStage.FRAGMENT,
-          buffer: { type: "uniform" }
+          buffer: { type: 'uniform' }
         }
       ]
   })
@@ -282,6 +371,11 @@ const init = async (canvas, starts_running = true) => {
     size: HISTOGRAM_BUFFER_SIZE,
     usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST
   })
+  const cleanHistogramBuffer = device.createBuffer({
+    label: 'FLAM3 > Buffer > Clean Histogram',
+    size: HISTOGRAM_BUFFER_SIZE,
+    usage: GPUBufferUsage.COPY_SRC
+  })
   const fractalBuffer = device.createBuffer({
     label: 'FLAM3 > Buffer > Fractal',
     size: 4 + 28 * 128,
@@ -292,6 +386,11 @@ const init = async (canvas, starts_running = true) => {
     size: 24,
     usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST
   })
+  //const timestampsBuffer = device.createBuffer({
+  //  label: 'FLAM3 > Buffer > Timestamps',
+  //  size: 8 * 2 * 4,
+  //  usage: GPUBufferUsage.QUERY_RESOLVE | GPUBufferUsage.COPY_DST
+  //})
 
   const bindGroup = device.createBindGroup({
     label: 'FLAM3 > Group Binding',
@@ -344,12 +443,12 @@ const init = async (canvas, starts_running = true) => {
     layout,
     vertex: {
       layout,
-      module: render_module,
+      module: vertex_module,
       entryPoint: 'vertex_main',
     },
     fragment: {
       layout,
-      module: render_module,
+      module: histogram_fragment_module,
       entryPoint: 'fragment_main',
       targets: [{ format }]
     },
@@ -359,28 +458,66 @@ const init = async (canvas, starts_running = true) => {
     }
   })
 
+  const guiPipeline = await device.createRenderPipelineAsync({
+    label: 'FLAM3 > Pipeline > GUI',
+    layout,
+    vertex: {
+      layout,
+      module: vertex_module,
+      entryPoint: 'vertex_main',
+    },
+    fragment: {
+      layout,
+      module: gui_fragment_module,
+      entryPoint: 'fragment_main',
+      targets: [{
+        format,
+        blend: {
+          color: {
+            srcFactor: 'src-alpha',
+            dstFactor: 'one-minus-src-alpha'
+          },
+          alpha: {
+            srcFactor: 'one',
+            dstFactor: 'one-minus-src-alpha'
+          }
+        }
+      }]
+    },
+    primitive: {
+      topology: 'triangle-strip',
+      stripIndexFormat: 'uint32'
+    }
+  })
+
+  //const timestampQuerySet = device.createQuerySet({
+  //  label: 'FLAM3 > QuerySet > Timings',
+  //  type: 'timestamp',
+  //  count: 16,
+  //})
+
   class Config {
     buffer = new ArrayBuffer(24)
 
     _origin = new Float32Array(this.buffer, 0, 2)
     get x()      { return this._origin[0] }
-    set x(value) { return this._origin[0] = value }
+    set x(value) { this._origin[0] = value }
     get y()      { return this._origin[1] }
-    set y(value) { return this._origin[1] = value }
+    set y(value) { this._origin[1] = value }
 
     _dimensions = new Uint32Array(this.buffer, 8, 2)
     get width()       { return this._dimensions[0] }
-    set width(value)  { return this._dimensions[0] = value }
+    set width(value)  { this._dimensions[0] = value }
     get height()      { return this._dimensions[1] }
-    set height(value) { return this._dimensions[1] = value }
+    set height(value) { this._dimensions[1] = value }
 
     _frame = new Uint32Array(this.buffer, 16, 1)
     get frame()      { return this._frame[0] }
-    set frame(value) { return this._frame[0] = value }
+    set frame(value) { this._frame[0] = value }
 
     _zoom = new Float32Array(this.buffer, 20, 1)
     get zoom()      { return this._zoom[0] }
-    set zoom(value) { return this._zoom[0] = value }
+    set zoom(value) { this._zoom[0] = value }
   }
   const config = window.config = new Config
   config.width = canvas.width
@@ -389,8 +526,8 @@ const init = async (canvas, starts_running = true) => {
 
   const VARIATION_SIZE = 28
   const fn_id_to_str_entries = [
-    [0, 'linear'],
-    [1, 'sinusoidal'],
+    [ 0, 'linear'],
+    [ 1, 'sinusoidal'],
     [27, 'eyefish']
   ];
   const fn_id_to_str = new Map(fn_id_to_str_entries)
@@ -415,13 +552,13 @@ const init = async (canvas, starts_running = true) => {
     get fn_id() {
       const id = this._fn_id[0]
       const result = fn_id_to_str.get(id)
-      if (result === undefined) throw new Error(`Unknown fn_id "${id}"`)
+      if (result === undefined) throw new Error(`Unknown fn_id '${id}'`)
       return result
     }
 
     set fn_id(value) {
       const id = str_to_fn_id.get(value)
-      if (id === undefined) throw new Error(`Unknown fn_id string "${value}"`)
+      if (id === undefined) throw new Error(`Unknown fn_id string '${value}'`)
       if (this._fn_id_element) this._fn_id_element.textContent = value
       this._fn_id[0] = id
     }
@@ -501,33 +638,40 @@ const init = async (canvas, starts_running = true) => {
 
   let running = starts_running
   function frame() {
-    // Copy current configuration
-    ++config.frame
+    const commandBuffers = []
+    let num_passes = 0
+    function with_encoder(action) {
+      const commandEncoder = device.createCommandEncoder()
+      //commandEncoder.writeTimestamp(timestampQuerySet, 2 * num_passes)
+      action(commandEncoder)
+      //commandEncoder.writeTimestamp(timestampQuerySet, 2 * num_passes + 1)
+      num_passes++
+      commandBuffers.push(commandEncoder.finish())
+    }
+
     if (should_clear_histogram) {
-      device.queue.writeBuffer(histogramBuffer, 0, new ArrayBuffer(HISTOGRAM_BUFFER_SIZE), 0)
+      with_encoder(commandEncoder => {
+        commandEncoder.copyBufferToBuffer(cleanHistogramBuffer, 0, histogramBuffer, 0, HISTOGRAM_BUFFER_SIZE)
+      })
       should_clear_histogram = false
     }
+    ++config.frame
     device.queue.writeBuffer(configBuffer, 0, config.buffer, 0)
     device.queue.writeBuffer(fractalBuffer, 0, fractal.buffer, 0)
 
-    const commandBuffers = []
-
     // Add some points to the histogram
-    {
-      const commandEncoder = device.createCommandEncoder()
+    with_encoder(commandEncoder => {
       const passEncoder = commandEncoder.beginComputePass({
         label: 'FLAM3 > Pass > Add points'
       })
       passEncoder.setBindGroup(0, bindGroup)
       passEncoder.setPipeline(addPointsPipeline)
-      passEncoder.dispatch(10000)
+      passEncoder.dispatch(20000)
       passEncoder.endPass()
-      commandBuffers.push(commandEncoder.finish())
-    }
+    })
 
     // Find the max of the histogram
-    {
-      const commandEncoder = device.createCommandEncoder()
+    with_encoder(commandEncoder => {
       const passEncoder = commandEncoder.beginComputePass({
         label: 'FLAM3 > Pass > Histogram Max'
       })
@@ -535,12 +679,10 @@ const init = async (canvas, starts_running = true) => {
       passEncoder.setPipeline(histogramMaxPipeline)
       passEncoder.dispatch(1000)
       passEncoder.endPass()
-      commandBuffers.push(commandEncoder.finish())
-    }
+    })
 
     // Render the histogram
-    {
-      const commandEncoder = device.createCommandEncoder()
+    with_encoder(commandEncoder => {
       const passEncoder = commandEncoder.beginRenderPass({
         label: 'FLAM3 > Pass > Render',
         colorAttachments: [{
@@ -553,8 +695,30 @@ const init = async (canvas, starts_running = true) => {
       passEncoder.setPipeline(renderPipeline)
       passEncoder.draw(4)
       passEncoder.endPass()
-      commandBuffers.push(commandEncoder.finish())
-    }
+    })
+
+    // Render the GUI
+    with_encoder(commandEncoder => {
+      const passEncoder = commandEncoder.beginRenderPass({
+        label: 'FLAM3 > Pass > GUI',
+        colorAttachments: [{
+          view: context.getCurrentTexture().createView(),
+          loadValue: 'load',
+          storeOp: 'store'
+        }]
+      })
+      passEncoder.setBindGroup(0, bindGroup)
+      passEncoder.setPipeline(guiPipeline)
+      passEncoder.draw(4)
+      passEncoder.endPass()
+    })
+
+    // Resolve the timestamps
+    //{
+    //  const commandEncoder = device.createCommandEncoder()
+    //  commandEncoder.resolveQuerySet(timestampQuerySet, 0, 2 * num_passes, timestampsBuffer, 0)
+    //  commandBuffers.push(commandEncoder.finish())
+    //}
 
     device.queue.submit(commandBuffers)
     if (running) requestAnimationFrame(frame)
