@@ -9,6 +9,217 @@
 ///   3. Gather the maximum value
 ///   4. Plot on the log-density display
 
+class Config {
+  buffer = new ArrayBuffer(24)
+
+  _origin = new Float32Array(this.buffer, 0, 2)
+  get x()      { return this._origin[0] }
+  set x(value) { this._origin[0] = value }
+  get y()      { return this._origin[1] }
+  set y(value) { this._origin[1] = value }
+
+  _dimensions = new Uint32Array(this.buffer, 8, 2)
+  get width()       { return this._dimensions[0] }
+  set width(value)  { this._dimensions[0] = value }
+  get height()      { return this._dimensions[1] }
+  set height(value) { this._dimensions[1] = value }
+
+  _frame = new Uint32Array(this.buffer, 16, 1)
+  get frame()      { return this._frame[0] }
+  set frame(value) { this._frame[0] = value }
+
+  _zoom = new Float32Array(this.buffer, 20, 1)
+  get zoom()      { return this._zoom[0] }
+  set zoom(value) { this._zoom[0] = value }
+}
+
+class StructWithFlexibleArrayElement {
+  static get SIZE() { return this.BASE_SIZE + this.ELEMENT_SIZE * this.MAX_ELEMENTS }
+  buffer = new ArrayBuffer(this.constructor.BASE_SIZE + this.constructor.ELEMENT_SIZE * this.constructor.MAX_ELEMENTS)
+  constructor() {
+    if (!'length' in this) this.length = 0
+  }
+
+  at(idx) {
+    if (idx < 0 || this.length <= idx)
+      throw new Error('Index out of bounds!')
+    return this[idx]
+  }
+
+  add(props) {
+    if (this.length === this.constructor.MAX_ELEMENTS)
+      throw new Error(`${this.constructor.Element.name} limit exceeded!`)
+    const element = this[this.length] = new this.constructor.Element(this.buffer, this.constructor.BASE_SIZE + this.constructor.ELEMENT_SIZE * this.length)
+    this.length++
+    Object.assign(element, props)
+    return element
+  }
+}
+Object.setPrototypeOf(StructWithFlexibleArrayElement.prototype, Array.prototype)
+
+const FN_ID_TO_STR_ENTRIES = [
+  [ 0, 'linear'],
+  [ 1, 'sinusoidal'],
+  [27, 'eyefish']
+];
+const FN_ID_TO_STR = new Map(FN_ID_TO_STR_ENTRIES)
+const STR_TO_FN_ID = new Map(FN_ID_TO_STR_ENTRIES.map(([a, b]) => [b, a]))
+class Variation {
+  constructor(buffer, offset) {
+    this._fn_id = new Uint32Array(buffer, offset, 1)
+    this._affine_transform = new Float32Array(buffer, offset + 4, 6)
+  }
+
+  set editor(value) {
+    [
+      this._fn_id_element,
+      this._a_element,
+      this._b_element,
+      this._c_element,
+      this._d_element,
+      this._e_element,
+      this._f_element
+    ] = value.querySelectorAll('[slot]')
+  }
+
+  get fn_id() {
+    const id = this._fn_id[0]
+    const result = FN_ID_TO_STR.get(id)
+    if (result === undefined) throw new Error(`Unknown fn_id '${id}'`)
+    return result
+  }
+
+  set fn_id(value) {
+    const id = STR_TO_FN_ID.get(value)
+    if (id === undefined) throw new Error(`Unknown fn_id string '${value}'`)
+    if (this._fn_id_element) this._fn_id_element.textContent = value
+    this._fn_id[0] = id
+  }
+
+  get a()      { return this._affine_transform[0] }
+  get b()      { return this._affine_transform[1] }
+  get c()      { return this._affine_transform[2] }
+  get d()      { return this._affine_transform[3] }
+  get e()      { return this._affine_transform[4] }
+  get f()      { return this._affine_transform[5] }
+  set a(value) {
+    this._affine_transform[0] = value
+    if (this._a_element) this._a_element.textContent = value
+  }
+  set b(value) {
+    this._affine_transform[1] = value
+    if (this._b_element) this._b_element.textContent = value
+  }
+  set c(value) {
+    this._affine_transform[2] = value
+    if (this._c_element) this._c_element.textContent = value
+  }
+  set d(value) {
+    this._affine_transform[3] = value
+    if (this._d_element) this._d_element.textContent = value
+  }
+  set e(value) {
+    this._affine_transform[4] = value
+    if (this._e_element) this._e_element.textContent = value
+  }
+  set f(value) {
+    this._affine_transform[5] = value
+    if (this._f_element) this._f_element.textContent = value
+  }
+}
+
+class Fractal extends StructWithFlexibleArrayElement {
+  static BASE_SIZE = 4
+  static ELEMENT_SIZE = 28
+  static MAX_ELEMENTS = 128
+  static Element = Variation
+
+  _length = new Uint32Array(this.buffer, 0, 1)
+  get length()      { return this._length[0] }
+  set length(value) { return this._length[0] = value }
+
+  add(props) {
+    const variation = super.add({
+      get editor() { return add_variation_editor() },
+      ...props
+    })
+    return variation
+  }
+}
+
+class Colors extends StructWithFlexibleArrayElement {
+  static BASE_SIZE = 0
+  static ELEMENT_SIZE = 16
+  static MAX_ELEMENTS = 256
+  static Element = class Color {
+    constructor(buffer, offset) {
+      this.buffer = new Float32Array(buffer, offset, 4)
+    }
+    get r() { return this.buffer[0] }
+    get g() { return this.buffer[1] }
+    get b() { return this.buffer[2] }
+    get a() { return this.buffer[3] }
+    set r(value) { this.buffer[0] = value }
+    set g(value) { this.buffer[1] = value }
+    set b(value) { this.buffer[2] = value }
+    set a(value) { this.buffer[3] = value }
+  }
+}
+class Circles extends StructWithFlexibleArrayElement {
+  static BASE_SIZE = 0
+  static ELEMENT_SIZE = 16
+  static MAX_ELEMENTS = 128
+  static Element = class Circle {
+    constructor(buffer, offset) {
+      this.buffer = new Float32Array(buffer, offset, 3)
+    }
+    get x() { return this.buffer[0] }
+    get y() { return this.buffer[1] }
+    get r() { return this.buffer[2] }
+    set x(value) { this.buffer[0] = value }
+    set y(value) { this.buffer[1] = value }
+    set r(value) { this.buffer[2] = value }
+  }
+}
+class Lines extends StructWithFlexibleArrayElement {
+  static BASE_SIZE = 0
+  static ELEMENT_SIZE = 24
+  static MAX_ELEMENTS = 128
+  static Element = class Circle {
+    constructor(buffer, offset) {
+      this.buffer = new Float32Array(buffer, offset, 5)
+    }
+    get from_x() { return this.buffer[0] }
+    get from_y() { return this.buffer[1] }
+    get to_x()   { return this.buffer[2] }
+    get to_y()   { return this.buffer[3] }
+    get width()  { return this.buffer[4] }
+    set from_x(value) { this.buffer[0] = value }
+    set from_y(value) { this.buffer[1] = value }
+    set to_x(value)   { this.buffer[2] = value }
+    set to_y(value)   { this.buffer[3] = value }
+    set width(value)  { this.buffer[4] = value }
+  }
+}
+class Primitives extends StructWithFlexibleArrayElement {
+  static BASE_SIZE = 4
+  static ELEMENT_SIZE = 4
+  static MAX_ELEMENTS = 256
+  static Element = class Primitive {
+    constructor(buffer, offset) {
+      this.buffer = new Uint32Array(buffer, offset, 1)
+    }
+    get kind()  { return this.buffer[0] & 0x0000FFFF }
+    get index() { return this.buffer[0] >> 16 }
+    set kind(value)  { this.buffer[0] = this.buffer[0] & 0xFFFF0000 | value }
+    set index(value) { this.buffer[0] = this.buffer[0] & 0x0000FFFF | (value << 16) }
+  }
+
+  _length = new Uint32Array(this.buffer, 0, 1)
+  get length()      { return this._length[0] }
+  set length(value) { return this._length[0] = value }
+}
+
 const common_code = `
 [[block]] struct Stage1Histogram {
   max: atomic<u32>;
@@ -216,9 +427,9 @@ ${common_code}
 
 let LINE_KIND = 0u;
 struct LinePrimitive {
-  width: f32;
   from: vec2<f32>;
   to: vec2<f32>;
+  width: f32;
 };
 
 let CIRCLE_KIND = 1u;
@@ -227,30 +438,41 @@ struct CirclePrimitive {
   radius: f32;
 };
 
-// Stores the primitive kind
-// The primitive is packed:
-//  * The lower 16 bits denote the type
-//  * The higher 16 bits denote the index
-var<private> primitives: array<u32, 4> = array<u32, 4>(
-  0x00000001u,
-  0x00010001u,
-  0x00000000u,
-  0x00010000u,
-);
-var<private> colors: array<vec4<f32>, 4> = array<vec4<f32>, 4>(
-  vec4<f32>(1.0, 1.0, 1.0, 1.0), // White
-  vec4<f32>(1.0, 0.0, 0.0, 0.5), // Red (Transparent)
-  vec4<f32>(0.0, 1.0, 0.0, 1.0), // Blue
-  vec4<f32>(0.0, 1.0, 1.0, 1.0), // Yellow
-);
-var<private> circles: array<CirclePrimitive, 2> = array<CirclePrimitive, 2>(
-  CirclePrimitive(vec2<f32>(0.0, 0.0), 0.4),
-  CirclePrimitive(vec2<f32>(0.4, -0.2), 0.2),
-);
-var<private> lines: array<LinePrimitive, 2> = array<LinePrimitive, 2>(
-  LinePrimitive(0.05, vec2<f32>(-1.0, -1.0), vec2<f32>(1.0,  1.0)),
-  LinePrimitive(0.10, vec2<f32>(-0.5,  0.8), vec2<f32>(0.6, -0.4)),
-);
+[[block]] struct Primitives {
+  length: u32;
+  // The primitives are packed:
+  //  * lower 16 bits denote the kind
+  //  * higher 16 bits denote the index
+  data: array<u32>;
+};
+[[block]] struct Colors  { data: array<vec4<f32>>; };
+[[block]] struct Lines   { data: array<LinePrimitive>; };
+[[block]] struct Circles { data: array<CirclePrimitive>; };
+
+[[group(1), binding(0)]] var<storage, read> primitives: Primitives;
+[[group(1), binding(1)]] var<storage, read> colors: Colors;
+[[group(1), binding(2)]] var<storage, read> lines: Lines;
+[[group(1), binding(3)]] var<storage, read> circles: Circles;
+//var<private> primitives: array<u32, 4> = array<u32, 4>(
+//  0x00000001u,
+//  0x00010001u,
+//  0x00000000u,
+//  0x00010000u,
+//);
+//var<private> colors: array<vec4<f32>, 4> = array<vec4<f32>, 4>(
+//  vec4<f32>(1.0, 1.0, 1.0, 1.0), // White
+//  vec4<f32>(1.0, 0.0, 0.0, 0.5), // Red (Transparent)
+//  vec4<f32>(0.0, 1.0, 0.0, 1.0), // Blue
+//  vec4<f32>(0.0, 1.0, 1.0, 1.0), // Yellow
+//);
+//var<private> circles: array<CirclePrimitive, 2> = array<CirclePrimitive, 2>(
+//  CirclePrimitive(vec2<f32>(0.0, 0.0), 0.4),
+//  CirclePrimitive(vec2<f32>(0.4, -0.2), 0.2),
+//);
+//var<private> lines: array<LinePrimitive, 2> = array<LinePrimitive, 2>(
+//  LinePrimitive(0.05, vec2<f32>(-1.0, -1.0), vec2<f32>(1.0,  1.0)),
+//  LinePrimitive(0.10, vec2<f32>(-0.5,  0.8), vec2<f32>(0.6, -0.4)),
+//);
 
 [[stage(fragment)]]
 fn fragment_main([[builtin(position)]] screen_pos: vec4<f32>) -> [[location(0)]] vec4<f32> {
@@ -258,16 +480,16 @@ fn fragment_main([[builtin(position)]] screen_pos: vec4<f32>) -> [[location(0)]]
   let normal_pos = (screen_pos.xy / dimensions * -2.0 + vec2<f32>(1.0)) / config.zoom - config.origin;
   var result = vec4<f32>(0.0); // Black (Transparent)
 
-  for (var i = 0u; i < 4u; i = i + 1u) {
-    let primitive = primitives[i];
+  for (var i = 0u; i < primitives.length; i = i + 1u) {
+    let primitive = primitives.data[i];
     let primitive_type = primitive & 0x0000FFFFu;
     let primitive_index = primitive >> 16u;
-    let color = colors[i];
+    let color = colors.data[i];
     switch (primitive_type) {
       // src: https://iquilezles.org/www/articles/distfunctions2d/distfunctions2d.htm
       case 0u /* LINE_KIND */: {
         // FIXME: Improve the names of the variables
-        let line = lines[primitive_index];
+        let line = lines.data[primitive_index];
         let line_length: f32 = length(line.to - line.from);
         let d: vec2<f32> = (line.to - line.from) / line_length;
         var q: vec2<f32> = normal_pos - (line.from + line.to) * 0.5;
@@ -278,7 +500,7 @@ fn fragment_main([[builtin(position)]] screen_pos: vec4<f32>) -> [[location(0)]]
         }
       }
       case 1u /* CIRCLE_KIND */: {
-        let circle = circles[primitive_index];
+        let circle = circles.data[primitive_index];
         if (length(normal_pos - circle.center) < circle.radius) {
           result = color;
         }
@@ -339,8 +561,8 @@ const init = async (canvas, starts_running = true) => {
       code: gui_fragment_wgsl
   })
 
-  const bindGroupLayout = device.createBindGroupLayout({
-      label: 'FLAM3 > Bind Group Layout',
+  const fractalBindGroupLayout = device.createBindGroupLayout({
+      label: 'FLAM3 > Bind Group Layout > Fractal',
       entries: [
         {
           binding: 0,
@@ -360,9 +582,39 @@ const init = async (canvas, starts_running = true) => {
       ]
   })
 
-  const layout = device.createPipelineLayout({
-    label: 'FLAM3 > Pipeline Layout',
-    bindGroupLayouts: [bindGroupLayout]
+  const guiBindGroupLayout = device.createBindGroupLayout({
+      label: 'FLAM3 > Bind Group Layout > GUI',
+      entries: [
+        {
+          binding: 0,
+          visibility: GPUShaderStage.FRAGMENT,
+          buffer: { type: 'storage' }
+        },
+        {
+          binding: 1,
+          visibility: GPUShaderStage.FRAGMENT,
+          buffer: { type: 'storage' }
+        },
+        {
+          binding: 2,
+          visibility: GPUShaderStage.FRAGMENT,
+          buffer: { type: 'storage' }
+        },
+        {
+          binding: 3,
+          visibility: GPUShaderStage.FRAGMENT,
+          buffer: { type: 'storage' }
+        }
+      ]
+  })
+
+  const fractalPipelineLayout = device.createPipelineLayout({
+    label: 'FLAM3 > Pipeline Layout > Fractal',
+    bindGroupLayouts: [fractalBindGroupLayout]
+  })
+  const guiPipelineLayout = device.createPipelineLayout({
+    label: 'FLAM3 > Pipeline Layout > GUI',
+    bindGroupLayouts: [fractalBindGroupLayout, guiBindGroupLayout]
   })
 
   const HISTOGRAM_BUFFER_SIZE = 4 + 4 * 900 * 900
@@ -378,7 +630,7 @@ const init = async (canvas, starts_running = true) => {
   })
   const fractalBuffer = device.createBuffer({
     label: 'FLAM3 > Buffer > Fractal',
-    size: 4 + 28 * 128,
+    size: Fractal.SIZE,
     usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST
   })
   const configBuffer = device.createBuffer({
@@ -386,43 +638,94 @@ const init = async (canvas, starts_running = true) => {
     size: 24,
     usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST
   })
-  //const timestampsBuffer = device.createBuffer({
-  //  label: 'FLAM3 > Buffer > Timestamps',
-  //  size: 8 * 2 * 4,
-  //  usage: GPUBufferUsage.QUERY_RESOLVE | GPUBufferUsage.COPY_DST
-  //})
 
-  const bindGroup = device.createBindGroup({
-    label: 'FLAM3 > Group Binding',
-    layout: bindGroupLayout,
+  const fractalBindGroup = device.createBindGroup({
+    label: 'FLAM3 > Group Binding > Fractal',
+    layout: fractalBindGroupLayout,
     entries: [
       {
         binding: 0,
         resource: {
-          label: 'FLAM3 > Binding > Histogram',
+          label: 'FLAM3 > Group Binding > Fractal > Histogram',
           buffer: histogramBuffer
         }
       },
       {
         binding: 1,
         resource: {
-          label: 'FLAM3 > Binding > Fractal',
+          label: 'FLAM3 > Group Binding > Fractal > Fractal',
           buffer: fractalBuffer
         }
       },
       {
         binding: 2,
         resource: {
-          label: 'FLAM3 > Binding > Configuration',
+          label: 'FLAM3 > Group Binding > Fractal > Configuration',
           buffer: configBuffer
         }
       }
     ]
   })
 
+  const primitivesBuffer = device.createBuffer({
+    label: 'FLAM3 > Buffer > GUI > Primitives',
+    size: Primitives.SIZE,
+    usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST
+  })
+  const colorsBuffer = device.createBuffer({
+    label: 'FLAM3 > Buffer > GUI > Colors',
+    size: Colors.SIZE,
+    usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST
+  })
+  const linesBuffer = device.createBuffer({
+    label: 'FLAM3 > Buffer > GUI > Lines',
+    size: Lines.SIZE,
+    usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST
+  })
+  const circlesBuffer = device.createBuffer({
+    label: 'FLAM3 > Buffer > GUI > Circles',
+    size: Circles.SIZE,
+    usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST
+  })
+
+  const guiBindGroup = device.createBindGroup({
+    label: 'FLAM3 > Group Binding > GUI',
+    layout: guiBindGroupLayout,
+    entries: [
+      {
+        binding: 0,
+        resource: {
+          label: 'FLAM3 > Group Binding > GUI > Primitives',
+          buffer: primitivesBuffer
+        }
+      },
+      {
+        binding: 1,
+        resource: {
+          label: 'FLAM3 > Group Binding > GUI > Colors',
+          buffer: colorsBuffer
+        }
+      },
+      {
+        binding: 2,
+        resource: {
+          label: 'FLAM3 > Group Binding > GUI > Lines',
+          buffer: linesBuffer
+        }
+      },
+      {
+        binding: 3,
+        resource: {
+          label: 'FLAM3 > Group Binding > GUI > Circles',
+          buffer: circlesBuffer
+        }
+      },
+    ]
+  })
+
   const addPointsPipeline = await device.createComputePipelineAsync({
       label: 'FLAM3 > Pipeline > Add points',
-      layout,
+      layout: fractalPipelineLayout,
       compute: {
           module: add_points_module,
           entryPoint: 'add_points'
@@ -431,7 +734,7 @@ const init = async (canvas, starts_running = true) => {
 
   const histogramMaxPipeline = await device.createComputePipelineAsync({
       label: 'FLAM3 > Pipeline > Histogram Max',
-      layout,
+      layout: fractalPipelineLayout,
       compute: {
           module: histogram_max_module,
           entryPoint: 'histogram_max'
@@ -440,14 +743,14 @@ const init = async (canvas, starts_running = true) => {
 
   const renderPipeline = await device.createRenderPipelineAsync({
     label: 'FLAM3 > Pipeline > Render',
-    layout,
+    layout: fractalPipelineLayout,
     vertex: {
-      layout,
+      layout: fractalPipelineLayout,
       module: vertex_module,
       entryPoint: 'vertex_main',
     },
     fragment: {
-      layout,
+      layout: fractalPipelineLayout,
       module: histogram_fragment_module,
       entryPoint: 'fragment_main',
       targets: [{ format }]
@@ -460,14 +763,14 @@ const init = async (canvas, starts_running = true) => {
 
   const guiPipeline = await device.createRenderPipelineAsync({
     label: 'FLAM3 > Pipeline > GUI',
-    layout,
+    layout: guiPipelineLayout,
     vertex: {
-      layout,
+      layout: guiPipelineLayout,
       module: vertex_module,
       entryPoint: 'vertex_main',
     },
     fragment: {
-      layout,
+      layout: guiPipelineLayout,
       module: gui_fragment_module,
       entryPoint: 'fragment_main',
       targets: [{
@@ -490,151 +793,90 @@ const init = async (canvas, starts_running = true) => {
     }
   })
 
-  //const timestampQuerySet = device.createQuerySet({
-  //  label: 'FLAM3 > QuerySet > Timings',
-  //  type: 'timestamp',
-  //  count: 16,
-  //})
-
-  class Config {
-    buffer = new ArrayBuffer(24)
-
-    _origin = new Float32Array(this.buffer, 0, 2)
-    get x()      { return this._origin[0] }
-    set x(value) { this._origin[0] = value }
-    get y()      { return this._origin[1] }
-    set y(value) { this._origin[1] = value }
-
-    _dimensions = new Uint32Array(this.buffer, 8, 2)
-    get width()       { return this._dimensions[0] }
-    set width(value)  { this._dimensions[0] = value }
-    get height()      { return this._dimensions[1] }
-    set height(value) { this._dimensions[1] = value }
-
-    _frame = new Uint32Array(this.buffer, 16, 1)
-    get frame()      { return this._frame[0] }
-    set frame(value) { this._frame[0] = value }
-
-    _zoom = new Float32Array(this.buffer, 20, 1)
-    get zoom()      { return this._zoom[0] }
-    set zoom(value) { this._zoom[0] = value }
-  }
   const config = window.config = new Config
   config.width = canvas.width
   config.height = canvas.height
   config.zoom = 1
 
-  const VARIATION_SIZE = 28
-  const fn_id_to_str_entries = [
-    [ 0, 'linear'],
-    [ 1, 'sinusoidal'],
-    [27, 'eyefish']
-  ];
-  const fn_id_to_str = new Map(fn_id_to_str_entries)
-  const str_to_fn_id = new Map(fn_id_to_str_entries.map(([a, b]) => [b, a]))
-  class Variation {
-    constructor(buffer, offset, element) {
-      this._fn_id = new Uint32Array(buffer, offset, 1)
-      this._affine_transform = new Float32Array(buffer, offset + 4, 6)
-
-      if (element)
-        [
-          this._fn_id_element,
-          this._a_element,
-          this._b_element,
-          this._c_element,
-          this._d_element,
-          this._e_element,
-          this._f_element
-        ] = element.querySelectorAll('[slot]')
-    }
-
-    get fn_id() {
-      const id = this._fn_id[0]
-      const result = fn_id_to_str.get(id)
-      if (result === undefined) throw new Error(`Unknown fn_id '${id}'`)
-      return result
-    }
-
-    set fn_id(value) {
-      const id = str_to_fn_id.get(value)
-      if (id === undefined) throw new Error(`Unknown fn_id string '${value}'`)
-      if (this._fn_id_element) this._fn_id_element.textContent = value
-      this._fn_id[0] = id
-    }
-
-    get a()      { return this._affine_transform[0] }
-    get b()      { return this._affine_transform[1] }
-    get c()      { return this._affine_transform[2] }
-    get d()      { return this._affine_transform[3] }
-    get e()      { return this._affine_transform[4] }
-    get f()      { return this._affine_transform[5] }
-    set a(value) {
-      this._affine_transform[0] = value
-      if (this._a_element) this._a_element.textContent = value
-    }
-    set b(value) {
-      this._affine_transform[1] = value
-      if (this._b_element) this._b_element.textContent = value
-    }
-    set c(value) {
-      this._affine_transform[2] = value
-      if (this._c_element) this._c_element.textContent = value
-    }
-    set d(value) {
-      this._affine_transform[3] = value
-      if (this._d_element) this._d_element.textContent = value
-    }
-    set e(value) {
-      this._affine_transform[4] = value
-      if (this._e_element) this._e_element.textContent = value
-    }
-    set f(value) {
-      this._affine_transform[5] = value
-      if (this._f_element) this._f_element.textContent = value
-    }
-  }
-
-  const MAX_VARIATIONS = 128
-  class Fractal {
-    buffer = new ArrayBuffer(4 + VARIATION_SIZE * MAX_VARIATIONS)
-
-    _length = new Uint32Array(this.buffer, 0, 1)
-    get length()      { return this._length[0] }
-    set length(value) { return this._length[0] = value }
-
-    at(idx) {
-      if (idx < 0 || this.length <= idx)
-        throw new Error('Index out of bounds!')
-      return this[idx]
-    }
-
-    add(fn_id, a, b, c, d, e, f) {
-      if (this.length === MAX_VARIATIONS)
-        throw new Error('Variations limit exceeded!')
-      const editor = add_variation_editor()
-      const variation = this[this.length] = new Variation(this.buffer, 4 + VARIATION_SIZE * this.length, editor)
-      this.length++
-      if (fn_id !== undefined) variation.fn_id = fn_id
-      if (a     !== undefined) variation.a     = a
-      if (b     !== undefined) variation.b     = b
-      if (c     !== undefined) variation.c     = c
-      if (d     !== undefined) variation.d     = d
-      if (e     !== undefined) variation.e     = e
-      if (f     !== undefined) variation.f     = f
-      return variation
-    }
-  }
   const fractal = new Fractal
-  //fractal.add('sinusoidal', 0.5,  0.0,  0.5,  0.0, 0.5,  0.5)
-  //fractal.add('sinusoidal', 0.5,  0.0, -0.5,  0.0, 0.5,  0.5)
-  //fractal.add('sinusoidal', 0.5,  0.0,  0.0,  0.0, 0.5, -0.5)
-  //fractal.add('linear',     0.0,  0.8,  0.0,  0.6, 0.0,  0.0)
-  //fractal.add('linear',     0.0, -0.8,  0.0, -0.6, 0.0,  0.0)
-  fractal.add('eyefish',  0.321636, -0.204179, -0.633718,  0.204179,   0.321637,  1.140693)
-  fractal.add('eyefish',  0.715673, -0.418864, 0.576108,  0.418864,  0.715673,  0.455125)
-  fractal.add('eyefish', -0.212317,  0.536045, 0.53578,  -0.536045, -0.212317, -0.743179)
-  fractal.add('linear', 0.7,  0.0, 0.0,  0.0, 0.7, 0.0)
+  //fractal.add({ fn_id: 'sinusoidal', a: 0.5, b:  0.0, c:  0.5, d:  0.0, e: 0.5, f:  0.5 })
+  //fractal.add({ fn_id: 'sinusoidal', a: 0.5, b:  0.0, c: -0.5, d:  0.0, e: 0.5, f:  0.5 })
+  //fractal.add({ fn_id: 'sinusoidal', a: 0.5, b:  0.0, c:  0.0, d:  0.0, e: 0.5, f: -0.5 })
+  //fractal.add({ fn_id: 'linear',     a: 0.0, b:  0.8, c:  0.0, d:  0.6, e: 0.0, f:  0.0 })
+  //fractal.add({ fn_id: 'linear',     a: 0.0, b: -0.8, c:  0.0, d: -0.6, e: 0.0, f:  0.0 })
+  fractal.add({ fn_id: 'eyefish', a:  0.321636, b: -0.204179, c: -0.633718, d:  0.204179, e:  0.321637, f:  1.140693 })
+  fractal.add({ fn_id: 'eyefish', a:  0.715673, b: -0.418864, c:  0.576108, d:  0.418864, e:  0.715673, f:  0.455125 })
+  fractal.add({ fn_id: 'eyefish', a: -0.212317, b:  0.536045, c:  0.53578,  d: -0.536045, e: -0.212317, f: -0.743179 })
+  fractal.add({ fn_id: 'linear',  a:  0.7,      b:  0.0,      c:  0.0,      d:  0.0,      e:  0.7,      f:  0.0      })
+
+  const primitives = new Primitives
+  const colors = new Colors
+  const lines = new Lines
+  const circles = new Circles
+
+  for (const xform of fractal) {
+    /* Lines */ {
+      /* Line for (1, 0) */ {
+        primitives.add({ kind: 0, index: lines.length })
+        colors.add({ r: 1.0, g: 0.4, b: 0.1, a: 1.0 })
+        lines.add({
+          width: 0.002,
+          from_x: xform.c,           from_y: xform.f,
+          to_x:   xform.a + xform.c, to_y: xform.d + xform.f
+        })
+      }
+      /* Line for (0, 1) */ {
+        primitives.add({ kind: 0, index: lines.length })
+        colors.add({ r: 1.0, g: 0.4, b: 0.1, a: 1.0 })
+        lines.add({
+          width: 0.002,
+          from_x: xform.c,           from_y: xform.f,
+          to_x:   xform.b + xform.c, to_y: xform.e + xform.f
+        })
+      }
+      /* Line from (1, 0) to (0, 1) */ {
+        primitives.add({ kind: 0, index: lines.length })
+        colors.add({ r: 1.0, g: 0.4, b: 0.1, a: 1.0 })
+        lines.add({
+          width: 0.002,
+          from_x: xform.a + xform.c, from_y: xform.d + xform.f,
+          to_x:   xform.b + xform.c, to_y:   xform.e + xform.f
+        })
+      }
+    }
+    /* Circles */ {
+      /* Point at (1, 0) */ {
+        // Big Circle
+        primitives.add({ kind: 1, index: circles.length })
+        colors.add({ r: 1.0, g: 0.4, b: 0.1, a: 1.0 })
+        circles.add({ x: xform.a + xform.c, y: xform.d + xform.f, r: 0.018 })
+        // Small Circle
+        primitives.add({ kind: 1, index: circles.length })
+        colors.add({ r: 0.0, g: 0.0, b: 0.0, a: 0.0 })
+        circles.add({ x: xform.a + xform.c, y: xform.d + xform.f, r: 0.010 })
+      }
+      /* Point at (0, 1) */ {
+        // Big Circle
+        primitives.add({ kind: 1, index: circles.length })
+        colors.add({ r: 1.0, g: 0.4, b: 0.1, a: 1.0 })
+        circles.add({ x: xform.b + xform.c, y: xform.e + xform.f, r: 0.018 })
+        // Small Circle
+        primitives.add({ kind: 1, index: circles.length })
+        colors.add({ r: 0.0, g: 0.0, b: 0.0, a: 0.0 })
+        circles.add({ x: xform.b + xform.c, y: xform.e + xform.f, r: 0.010 })
+      }
+      /* Point at (0, 0) */ {
+        // Big Circle
+        primitives.add({ kind: 1, index: circles.length })
+        colors.add({ r: 1.0, g: 0.4, b: 0.1, a: 1.0 })
+        circles.add({ x: xform.c, y: xform.f, r: 0.03 })
+        // Small Circle
+        primitives.add({ kind: 1, index: circles.length })
+        colors.add({ r: 1.0, g: 0.4, b: 0.1, a: 0.3 })
+        circles.add({ x: xform.c, y: xform.f, r: 0.025 })
+      }
+    }
+  }
 
   let running = starts_running
   function frame() {
@@ -642,9 +884,7 @@ const init = async (canvas, starts_running = true) => {
     let num_passes = 0
     function with_encoder(action) {
       const commandEncoder = device.createCommandEncoder()
-      //commandEncoder.writeTimestamp(timestampQuerySet, 2 * num_passes)
       action(commandEncoder)
-      //commandEncoder.writeTimestamp(timestampQuerySet, 2 * num_passes + 1)
       num_passes++
       commandBuffers.push(commandEncoder.finish())
     }
@@ -656,15 +896,19 @@ const init = async (canvas, starts_running = true) => {
       should_clear_histogram = false
     }
     ++config.frame
-    device.queue.writeBuffer(configBuffer, 0, config.buffer, 0)
-    device.queue.writeBuffer(fractalBuffer, 0, fractal.buffer, 0)
+    device.queue.writeBuffer(configBuffer,     0, config.buffer,     0)
+    device.queue.writeBuffer(fractalBuffer,    0, fractal.buffer,    0)
+    device.queue.writeBuffer(primitivesBuffer, 0, primitives.buffer, 0)
+    device.queue.writeBuffer(colorsBuffer,     0, colors.buffer,     0)
+    device.queue.writeBuffer(linesBuffer,      0, lines.buffer,      0)
+    device.queue.writeBuffer(circlesBuffer,    0, circles.buffer,    0)
 
     // Add some points to the histogram
     with_encoder(commandEncoder => {
       const passEncoder = commandEncoder.beginComputePass({
         label: 'FLAM3 > Pass > Add points'
       })
-      passEncoder.setBindGroup(0, bindGroup)
+      passEncoder.setBindGroup(0, fractalBindGroup)
       passEncoder.setPipeline(addPointsPipeline)
       passEncoder.dispatch(20000)
       passEncoder.endPass()
@@ -675,7 +919,7 @@ const init = async (canvas, starts_running = true) => {
       const passEncoder = commandEncoder.beginComputePass({
         label: 'FLAM3 > Pass > Histogram Max'
       })
-      passEncoder.setBindGroup(0, bindGroup)
+      passEncoder.setBindGroup(0, fractalBindGroup)
       passEncoder.setPipeline(histogramMaxPipeline)
       passEncoder.dispatch(1000)
       passEncoder.endPass()
@@ -691,7 +935,7 @@ const init = async (canvas, starts_running = true) => {
           storeOp: 'store'
         }]
       })
-      passEncoder.setBindGroup(0, bindGroup)
+      passEncoder.setBindGroup(0, fractalBindGroup)
       passEncoder.setPipeline(renderPipeline)
       passEncoder.draw(4)
       passEncoder.endPass()
@@ -707,18 +951,12 @@ const init = async (canvas, starts_running = true) => {
           storeOp: 'store'
         }]
       })
-      passEncoder.setBindGroup(0, bindGroup)
+      passEncoder.setBindGroup(0, fractalBindGroup)
+      passEncoder.setBindGroup(1, guiBindGroup)
       passEncoder.setPipeline(guiPipeline)
       passEncoder.draw(4)
       passEncoder.endPass()
     })
-
-    // Resolve the timestamps
-    //{
-    //  const commandEncoder = device.createCommandEncoder()
-    //  commandEncoder.resolveQuerySet(timestampQuerySet, 0, 2 * num_passes, timestampsBuffer, 0)
-    //  commandBuffers.push(commandEncoder.finish())
-    //}
 
     device.queue.submit(commandBuffers)
     if (running) requestAnimationFrame(frame)
