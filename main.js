@@ -179,6 +179,10 @@ class Circles extends StructWithFlexibleArrayElement {
     set x(value) { this.buffer[0] = value }
     set y(value) { this.buffer[1] = value }
     set r(value) { this.buffer[2] = value }
+
+    contains(point) {
+      return (this.x - point.x) ** 2 + (this.y - point.y) ** 2 < (this.r / flam3.config.zoom) ** 2
+    }
   }
 }
 class Lines extends StructWithFlexibleArrayElement {
@@ -226,7 +230,7 @@ class Primitives extends StructWithFlexibleArrayElement {
   add(props) {
     const { kind, color, shape } = props
     const collection = kind === 0 ? this.lines : this.circles
-    super.add({
+    return super.add({
       kind,
       index: collection.length,
       color: this.colors.add(color),
@@ -830,93 +834,128 @@ const init = async (canvas, starts_running = true) => {
 
   const primitives = new Primitives
 
-  for (const xform of fractal) {
-    /* Lines */ {
-      /* Line for (1, 0) */ primitives.add({
+  class XFormTriangle {
+    constructor(xform, primitives, color) {
+      const base_color = color
+      const translucent_color = { ...base_color, a: base_color.a * 0.3 }
+      const transparent_black = { r: 0.0, b: 0.0, g: 0.0, a: 0.0 }
+
+      this.xform = xform
+
+      this.line_00_10 = primitives.add({
         kind: 0,
-        color: { r: 1.0, g: 0.4, b: 0.1, a: 1.0 },
+        color: base_color,
         shape: {
           width: 0.01,
           from_x: xform.c,           from_y: xform.f,
           to_x:   xform.a + xform.c, to_y:   xform.d + xform.f
         }
       })
-      /* Line for (0, 1) */ primitives.add({
+      this.line_00_01 = primitives.add({
         kind: 0,
-        color: { r: 1.0, g: 0.4, b: 0.1, a: 1.0 },
+        color: base_color,
         shape: {
           width: 0.01,
           from_x: xform.c,           from_y: xform.f,
           to_x:   xform.b + xform.c, to_y:   xform.e + xform.f
         }
       })
-      /* Line from (1, 0) to (0, 1) */ primitives.add({
+      this.line_10_01 = primitives.add({
         kind: 0,
-        color: { r: 1.0, g: 0.4, b: 0.1, a: 1.0 },
+        color: base_color,
         shape: {
           width: 0.01,
           from_x: xform.a + xform.c, from_y: xform.d + xform.f,
           to_x:   xform.b + xform.c, to_y:   xform.e + xform.f
         }
       })
+      this.ring_10 = primitives.add({
+        kind: 1,
+        color: base_color,
+        shape: {
+          x: xform.a + xform.c, y: xform.d + xform.f,
+          r: 0.04
+        }
+      })
+      this.hole_10 = primitives.add({
+        kind: 1,
+        color: transparent_black,
+        shape: {
+          x: xform.a + xform.c, y: xform.d + xform.f,
+          r: 0.03
+        }
+      })
+      this.ring_01 = primitives.add({
+        kind: 1,
+        color: base_color,
+        shape: {
+          x: xform.b + xform.c, y: xform.e + xform.f,
+          r: 0.04
+        }
+      })
+      this.hole_01 = primitives.add({
+        kind: 1,
+        color: transparent_black,
+        shape: {
+          x: xform.b + xform.c, y: xform.e + xform.f,
+          r: 0.03
+        }
+      })
+      this.ring_00 = primitives.add({
+        kind: 1,
+        color: base_color,
+        shape: {
+          x: xform.c, y: xform.f,
+          r: 0.06
+        }
+      })
+      this.hole_00 = primitives.add({
+        kind: 1,
+        color: translucent_color,
+        shape: {
+          x: xform.c, y: xform.f,
+          r: 0.05
+        }
+      })
     }
-    /* Circles */ {
-      /* Point at (1, 0) */ {
-        /* Big Circle */ primitives.add({
-          kind: 1,
-          color: { r: 1.0, g: 0.4, b: 0.1, a: 1.0 },
-          shape: {
-            x: xform.a + xform.c, y: xform.d + xform.f,
-            r: 0.04
-          }
-        })
-        /* Small Circle */ primitives.add({
-          kind: 1,
-          color: { r: 0.0, g: 0.0, b: 0.0, a: 0.0 },
-          shape: {
-            x: xform.a + xform.c, y: xform.d + xform.f,
-            r: 0.03
-          }
-        })
+
+    pointer_down(point) {
+      const draggable_elements = [this.ring_00, this.ring_10, this.ring_01]
+      this.currently_dragging = draggable_elements.find(elem => elem.shape.contains(point))
+      return this.currently_dragging !== undefined
+    }
+    pointer_up() {
+      this.currently_dragging = undefined
+    }
+    pointer_move(point) {
+      if (this.currently_dragging === undefined) return false
+      // Translate the whole thing
+      if (this.currently_dragging === this.ring_00) {
+        const delta_x = point.x - this.ring_00.shape.x
+        const delta_y = point.y - this.ring_00.shape.y
+        const lines = [this.line_00_01, this.line_00_10, this.line_10_01]
+        const circles = [this.ring_01, this.hole_01, this.ring_10, this.hole_10, this.ring_00, this.hole_00]
+        for (const line of lines) {
+          line.shape.from_x += delta_x
+          line.shape.from_y += delta_y
+          line.shape.to_x   += delta_x
+          line.shape.to_y   += delta_y
+        }
+        for (const circle of circles) {
+          circle.shape.x += delta_x
+          circle.shape.y += delta_y
+        }
+
+        this.xform.c += delta_x
+        this.xform.f += delta_y
+        flam3.clear()
       }
-      /* Point at (0, 1) */ {
-        /* Big Circle */ primitives.add({
-          kind: 1,
-          color: { r: 1.0, g: 0.4, b: 0.1, a: 1.0 },
-          shape: {
-            x: xform.b + xform.c, y: xform.e + xform.f,
-            r: 0.04
-          }
-        })
-        /* Small Circle */ primitives.add({
-          kind: 1,
-          color: { r: 0.0, g: 0.0, b: 0.0, a: 0.0 },
-          shape: {
-            x: xform.b + xform.c, y: xform.e + xform.f,
-            r: 0.03
-          }
-        })
-      }
-      /* Point at (0, 0) */ {
-        /* Big Circle */ primitives.add({
-          kind: 1,
-          color: { r: 1.0, g: 0.4, b: 0.1, a: 1.0 },
-          shape: {
-            x: xform.c, y: xform.f,
-            r: 0.06
-          }
-        })
-        /* Small Circle */ primitives.add({
-          kind: 1,
-          color: { r: 1.0, g: 0.4, b: 0.1, a: 0.3 },
-          shape: {
-            x: xform.c, y: xform.f,
-            r: 0.05
-          }
-        })
-      }
+      return true
     }
   }
+
+  const gui = fractal.map(xform => new XFormTriangle(xform, primitives, { r: 1.0, g: 0.4, b: 0.1, a: 1.0 }))
+  gui.reverse()
 
   let running = starts_running
   function frame() {
@@ -1026,17 +1065,32 @@ const init = async (canvas, starts_running = true) => {
     flam3.config.zoom *= ev.deltaY < 0 ? 1.1 : 0.9
     flam3.clear()
   }
-  canvas.onpointerdown = ev => {
-    canvas.onpointermove = ev => {
+  gui.push({
+    pointer_down() { return true },
+    pointer_up() { return true },
+    pointer_move(_point, ev) {
       const cursor_delta_x = -ev.movementX / canvas.width
       const cursor_delta_y = -ev.movementY / canvas.height
       flam3.config.x += cursor_delta_x / config.zoom
       flam3.config.y += cursor_delta_y / config.zoom
       flam3.clear()
+      return true
     }
+  })
+  function to_normalized_point(ev) {
+    return {
+      x: (ev.clientX / canvas.width  * -2 + 1) / config.zoom - flam3.config.x,
+      y: (ev.clientY / canvas.height * -2 + 1) / config.zoom - flam3.config.y
+    }
+  }
+  canvas.onpointerdown = ev => {
+    const normalized_point = to_normalized_point(ev)
+    gui.find(gui_element => gui_element.pointer_down(normalized_point, ev))
+    canvas.onpointermove = ev => gui.find(gui_element => gui_element.pointer_move(to_normalized_point(ev), ev))
     canvas.setPointerCapture(ev.pointerId)
   }
   canvas.onpointerup = ev => {
+    gui.find(gui_element => gui_element.pointer_up(to_normalized_point(ev), ev))
     canvas.onpointermove = null
     canvas.releasePointerCapture(ev.pointerId)
   }
