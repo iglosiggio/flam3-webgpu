@@ -500,7 +500,7 @@ struct CirclePrimitive {
 [[stage(fragment)]]
 fn fragment_main([[builtin(position)]] screen_pos: vec4<f32>) -> [[location(0)]] vec4<f32> {
   let dimensions = vec2<f32>(config.dimensions);
-  let normal_pos = (screen_pos.xy / dimensions * -2.0 + vec2<f32>(1.0)) / config.zoom - config.origin;
+  let normal_pos = (screen_pos.xy / dimensions * 2.0 - vec2<f32>(1.0)) / config.zoom + config.origin;
   var result = vec4<f32>(0.0); // Black (Transparent)
 
   for (var i = 0u; i < primitives.length; i = i + 1u) {
@@ -1079,8 +1079,8 @@ const init = async (canvas, starts_running = true) => {
   })
   function to_normalized_point(ev) {
     return {
-      x: (ev.clientX / canvas.width  * -2 + 1) / config.zoom - flam3.config.x,
-      y: (ev.clientY / canvas.height * -2 + 1) / config.zoom - flam3.config.y
+      x: (ev.clientX / canvas.width  * 2 - 1) / config.zoom + flam3.config.x,
+      y: (ev.clientY / canvas.height * 2 - 1) / config.zoom + flam3.config.y
     }
   }
   canvas.onpointerdown = ev => {
