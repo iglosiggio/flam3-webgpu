@@ -209,10 +209,26 @@ class Primitives extends StructWithFlexibleArrayElement {
     constructor(buffer, offset) {
       this.buffer = new Uint32Array(buffer, offset, 1)
     }
+
     get kind()  { return this.buffer[0] & 0x0000FFFF }
     get index() { return this.buffer[0] >> 16 }
     set kind(value)  { this.buffer[0] = this.buffer[0] & 0xFFFF0000 | value }
     set index(value) { this.buffer[0] = this.buffer[0] & 0x0000FFFF | (value << 16) }
+  }
+
+  constructor() {
+    super()
+    this.colors = new Colors
+    this.lines = new Lines
+    this.circles = new Circles
+  }
+
+  add(props) {
+    const { kind, color, ...elem_props } = props
+    const collection = kind === 0 ? this.lines : this.circles
+    super.add({ kind, index: collection.length })
+    this.colors.add(color)
+    collection.add(elem_props)
   }
 
   _length = new Uint32Array(this.buffer, 0, 1)
@@ -810,70 +826,73 @@ const init = async (canvas, starts_running = true) => {
   fractal.add({ fn_id: 'linear',  a:  0.7,      b:  0.0,      c:  0.0,      d:  0.0,      e:  0.7,      f:  0.0      })
 
   const primitives = new Primitives
-  const colors = new Colors
-  const lines = new Lines
-  const circles = new Circles
 
   for (const xform of fractal) {
     /* Lines */ {
-      /* Line for (1, 0) */ {
-        primitives.add({ kind: 0, index: lines.length })
-        colors.add({ r: 1.0, g: 0.4, b: 0.1, a: 1.0 })
-        lines.add({
-          width: 0.01,
-          from_x: xform.c,           from_y: xform.f,
-          to_x:   xform.a + xform.c, to_y: xform.d + xform.f
-        })
-      }
-      /* Line for (0, 1) */ {
-        primitives.add({ kind: 0, index: lines.length })
-        colors.add({ r: 1.0, g: 0.4, b: 0.1, a: 1.0 })
-        lines.add({
-          width: 0.01,
-          from_x: xform.c,           from_y: xform.f,
-          to_x:   xform.b + xform.c, to_y: xform.e + xform.f
-        })
-      }
-      /* Line from (1, 0) to (0, 1) */ {
-        primitives.add({ kind: 0, index: lines.length })
-        colors.add({ r: 1.0, g: 0.4, b: 0.1, a: 1.0 })
-        lines.add({
-          width: 0.01,
-          from_x: xform.a + xform.c, from_y: xform.d + xform.f,
-          to_x:   xform.b + xform.c, to_y:   xform.e + xform.f
-        })
-      }
+      /* Line for (1, 0) */ primitives.add({
+        kind: 0,
+        color: { r: 1.0, g: 0.4, b: 0.1, a: 1.0 },
+        width: 0.01,
+        from_x: xform.c,           from_y: xform.f,
+        to_x:   xform.a + xform.c, to_y: xform.d + xform.f
+      })
+      /* Line for (0, 1) */ primitives.add({
+        kind: 0,
+        color: { r: 1.0, g: 0.4, b: 0.1, a: 1.0 },
+        width: 0.01,
+        from_x: xform.c,           from_y: xform.f,
+        to_x:   xform.b + xform.c, to_y: xform.e + xform.f
+      })
+      /* Line from (1, 0) to (0, 1) */ primitives.add({
+        kind: 0,
+        color: { r: 1.0, g: 0.4, b: 0.1, a: 1.0 },
+        width: 0.01,
+        from_x: xform.a + xform.c, from_y: xform.d + xform.f,
+        to_x:   xform.b + xform.c, to_y:   xform.e + xform.f
+      })
     }
     /* Circles */ {
       /* Point at (1, 0) */ {
-        // Big Circle
-        primitives.add({ kind: 1, index: circles.length })
-        colors.add({ r: 1.0, g: 0.4, b: 0.1, a: 1.0 })
-        circles.add({ x: xform.a + xform.c, y: xform.d + xform.f, r: 0.04 })
-        // Small Circle
-        primitives.add({ kind: 1, index: circles.length })
-        colors.add({ r: 0.0, g: 0.0, b: 0.0, a: 0.0 })
-        circles.add({ x: xform.a + xform.c, y: xform.d + xform.f, r: 0.03 })
+        /* Big Circle */ primitives.add({
+          kind: 1,
+          color: { r: 1.0, g: 0.4, b: 0.1, a: 1.0 },
+          x: xform.a + xform.c, y: xform.d + xform.f,
+          r: 0.04
+        })
+        /* Small Circle */ primitives.add({
+          kind: 1,
+          color: { r: 0.0, g: 0.0, b: 0.0, a: 0.0 },
+          x: xform.a + xform.c, y: xform.d + xform.f,
+          r: 0.03
+        })
       }
       /* Point at (0, 1) */ {
-        // Big Circle
-        primitives.add({ kind: 1, index: circles.length })
-        colors.add({ r: 1.0, g: 0.4, b: 0.1, a: 1.0 })
-        circles.add({ x: xform.b + xform.c, y: xform.e + xform.f, r: 0.04 })
-        // Small Circle
-        primitives.add({ kind: 1, index: circles.length })
-        colors.add({ r: 0.0, g: 0.0, b: 0.0, a: 0.0 })
-        circles.add({ x: xform.b + xform.c, y: xform.e + xform.f, r: 0.03 })
+        /* Big Circle */ primitives.add({
+          kind: 1,
+          color: { r: 1.0, g: 0.4, b: 0.1, a: 1.0 },
+          x: xform.b + xform.c, y: xform.e + xform.f,
+          r: 0.04
+        })
+        /* Small Circle */ primitives.add({
+          kind: 1,
+          color: { r: 0.0, g: 0.0, b: 0.0, a: 0.0 },
+          x: xform.b + xform.c, y: xform.e + xform.f,
+          r: 0.03
+        })
       }
       /* Point at (0, 0) */ {
-        // Big Circle
-        primitives.add({ kind: 1, index: circles.length })
-        colors.add({ r: 1.0, g: 0.4, b: 0.1, a: 1.0 })
-        circles.add({ x: xform.c, y: xform.f, r: 0.06 })
-        // Small Circle
-        primitives.add({ kind: 1, index: circles.length })
-        colors.add({ r: 1.0, g: 0.4, b: 0.1, a: 0.3 })
-        circles.add({ x: xform.c, y: xform.f, r: 0.05 })
+        /* Big Circle */ primitives.add({
+          kind: 1,
+          color: { r: 1.0, g: 0.4, b: 0.1, a: 1.0 },
+          x: xform.c, y: xform.f,
+          r: 0.06
+        })
+        /* Small Circle */ primitives.add({
+          kind: 1,
+          color: { r: 1.0, g: 0.4, b: 0.1, a: 0.3 },
+          x: xform.c, y: xform.f,
+          r: 0.05
+        })
       }
     }
   }
@@ -898,10 +917,12 @@ const init = async (canvas, starts_running = true) => {
     ++config.frame
     device.queue.writeBuffer(configBuffer,     0, config.buffer,     0)
     device.queue.writeBuffer(fractalBuffer,    0, fractal.buffer,    0)
-    device.queue.writeBuffer(primitivesBuffer, 0, primitives.buffer, 0)
-    device.queue.writeBuffer(colorsBuffer,     0, colors.buffer,     0)
-    device.queue.writeBuffer(linesBuffer,      0, lines.buffer,      0)
-    device.queue.writeBuffer(circlesBuffer,    0, circles.buffer,    0)
+
+    // GUI
+    device.queue.writeBuffer(primitivesBuffer, 0, primitives.buffer,         0)
+    device.queue.writeBuffer(colorsBuffer,     0, primitives.colors.buffer,  0)
+    device.queue.writeBuffer(linesBuffer,      0, primitives.lines.buffer,   0)
+    device.queue.writeBuffer(circlesBuffer,    0, primitives.circles.buffer, 0)
 
     // Add some points to the histogram
     with_encoder(commandEncoder => {
