@@ -494,14 +494,14 @@ fn fragment_main([[builtin(position)]] screen_pos: vec4<f32>) -> [[location(0)]]
         let d: vec2<f32> = (line.to - line.from) / line_length;
         var q: vec2<f32> = normal_pos - (line.from + line.to) * 0.5;
         q = mat2x2<f32>(d.x, -d.y, d.y, d.x) * q;
-        q = abs(q) - vec2<f32>(line_length, line.width) * 0.5;
+        q = abs(q) - vec2<f32>(line_length, line.width / config.zoom) * 0.5;
         if (length(max(q, vec2<f32>(0.0))) + min(max(q.x, q.y), 0.0) < 0.0) {
           result = color;
         }
       }
       case 1u /* CIRCLE_KIND */: {
         let circle = circles.data[primitive_index];
-        if (length(normal_pos - circle.center) < circle.radius) {
+        if (length(normal_pos - circle.center) < circle.radius / config.zoom) {
           result = color;
         }
       }
@@ -820,7 +820,7 @@ const init = async (canvas, starts_running = true) => {
         primitives.add({ kind: 0, index: lines.length })
         colors.add({ r: 1.0, g: 0.4, b: 0.1, a: 1.0 })
         lines.add({
-          width: 0.002,
+          width: 0.01,
           from_x: xform.c,           from_y: xform.f,
           to_x:   xform.a + xform.c, to_y: xform.d + xform.f
         })
@@ -829,7 +829,7 @@ const init = async (canvas, starts_running = true) => {
         primitives.add({ kind: 0, index: lines.length })
         colors.add({ r: 1.0, g: 0.4, b: 0.1, a: 1.0 })
         lines.add({
-          width: 0.002,
+          width: 0.01,
           from_x: xform.c,           from_y: xform.f,
           to_x:   xform.b + xform.c, to_y: xform.e + xform.f
         })
@@ -838,7 +838,7 @@ const init = async (canvas, starts_running = true) => {
         primitives.add({ kind: 0, index: lines.length })
         colors.add({ r: 1.0, g: 0.4, b: 0.1, a: 1.0 })
         lines.add({
-          width: 0.002,
+          width: 0.01,
           from_x: xform.a + xform.c, from_y: xform.d + xform.f,
           to_x:   xform.b + xform.c, to_y:   xform.e + xform.f
         })
@@ -849,31 +849,31 @@ const init = async (canvas, starts_running = true) => {
         // Big Circle
         primitives.add({ kind: 1, index: circles.length })
         colors.add({ r: 1.0, g: 0.4, b: 0.1, a: 1.0 })
-        circles.add({ x: xform.a + xform.c, y: xform.d + xform.f, r: 0.012 })
+        circles.add({ x: xform.a + xform.c, y: xform.d + xform.f, r: 0.04 })
         // Small Circle
         primitives.add({ kind: 1, index: circles.length })
         colors.add({ r: 0.0, g: 0.0, b: 0.0, a: 0.0 })
-        circles.add({ x: xform.a + xform.c, y: xform.d + xform.f, r: 0.010 })
+        circles.add({ x: xform.a + xform.c, y: xform.d + xform.f, r: 0.03 })
       }
       /* Point at (0, 1) */ {
         // Big Circle
         primitives.add({ kind: 1, index: circles.length })
         colors.add({ r: 1.0, g: 0.4, b: 0.1, a: 1.0 })
-        circles.add({ x: xform.b + xform.c, y: xform.e + xform.f, r: 0.012 })
+        circles.add({ x: xform.b + xform.c, y: xform.e + xform.f, r: 0.04 })
         // Small Circle
         primitives.add({ kind: 1, index: circles.length })
         colors.add({ r: 0.0, g: 0.0, b: 0.0, a: 0.0 })
-        circles.add({ x: xform.b + xform.c, y: xform.e + xform.f, r: 0.010 })
+        circles.add({ x: xform.b + xform.c, y: xform.e + xform.f, r: 0.03 })
       }
       /* Point at (0, 0) */ {
         // Big Circle
         primitives.add({ kind: 1, index: circles.length })
         colors.add({ r: 1.0, g: 0.4, b: 0.1, a: 1.0 })
-        circles.add({ x: xform.c, y: xform.f, r: 0.020 })
+        circles.add({ x: xform.c, y: xform.f, r: 0.06 })
         // Small Circle
         primitives.add({ kind: 1, index: circles.length })
         colors.add({ r: 1.0, g: 0.4, b: 0.1, a: 0.3 })
-        circles.add({ x: xform.c, y: xform.f, r: 0.018 })
+        circles.add({ x: xform.c, y: xform.f, r: 0.05 })
       }
     }
   }
