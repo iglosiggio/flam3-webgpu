@@ -1068,8 +1068,8 @@ const init = async (canvas, starts_running = true) => {
     pointer_down() { return true },
     pointer_up() { return true },
     pointer_move(_point, ev) {
-      const cursor_delta_x = -ev.movementX / canvas.width
-      const cursor_delta_y = -ev.movementY / canvas.height
+      const cursor_delta_x = -ev.movementX / canvas.width  * 2
+      const cursor_delta_y = -ev.movementY / canvas.height * 2
       flam3.config.x += cursor_delta_x / config.zoom
       flam3.config.y += cursor_delta_y / config.zoom
       flam3.clear()
