@@ -911,6 +911,9 @@ const init = async (canvas, starts_running = true) => {
       if (this.currently_dragging === undefined) return false
       // Translate the whole thing
       if (this.currently_dragging === this.ring_00) {
+        this.xform.c = point.x
+        this.xform.f = point.y
+
         const delta_x = point.x - this.ring_00.shape.x
         const delta_y = point.y - this.ring_00.shape.y
         const lines = [this.line_00_01, this.line_00_10, this.line_10_01]
@@ -925,11 +928,24 @@ const init = async (canvas, starts_running = true) => {
           circle.shape.x += delta_x
           circle.shape.y += delta_y
         }
-
-        this.xform.c += delta_x
-        this.xform.f += delta_y
-        flam3.clear()
       }
+      // Translate the (0, 1) point
+      if (this.currently_dragging === this.ring_01) {
+        this.xform.b = point.x - this.xform.c
+        this.xform.e = point.y - this.xform.f
+
+        this.ring_01.shape.x = this.hole_01.shape.x = this.line_00_01.shape.to_x = this.line_10_01.shape.to_x = point.x
+        this.ring_01.shape.y = this.hole_01.shape.y = this.line_00_01.shape.to_y = this.line_10_01.shape.to_y = point.y
+      }
+      // Translate the (1, 0) point
+      if (this.currently_dragging === this.ring_10) {
+        this.xform.a = point.x - this.xform.c
+        this.xform.d = point.y - this.xform.f
+
+        this.ring_10.shape.x = this.hole_10.shape.x = this.line_00_10.shape.to_x = this.line_10_01.shape.from_x = point.x
+        this.ring_10.shape.y = this.hole_10.shape.y = this.line_00_10.shape.to_y = this.line_10_01.shape.from_y = point.y
+      }
+      flam3.clear()
       return true
     }
   }
