@@ -476,26 +476,6 @@ struct CirclePrimitive {
 [[group(1), binding(1)]] var<storage, read> colors: Colors;
 [[group(1), binding(2)]] var<storage, read> lines: Lines;
 [[group(1), binding(3)]] var<storage, read> circles: Circles;
-//var<private> primitives: array<u32, 4> = array<u32, 4>(
-//  0x00000001u,
-//  0x00010001u,
-//  0x00000000u,
-//  0x00010000u,
-//);
-//var<private> colors: array<vec4<f32>, 4> = array<vec4<f32>, 4>(
-//  vec4<f32>(1.0, 1.0, 1.0, 1.0), // White
-//  vec4<f32>(1.0, 0.0, 0.0, 0.5), // Red (Transparent)
-//  vec4<f32>(0.0, 1.0, 0.0, 1.0), // Blue
-//  vec4<f32>(0.0, 1.0, 1.0, 1.0), // Yellow
-//);
-//var<private> circles: array<CirclePrimitive, 2> = array<CirclePrimitive, 2>(
-//  CirclePrimitive(vec2<f32>(0.0, 0.0), 0.4),
-//  CirclePrimitive(vec2<f32>(0.4, -0.2), 0.2),
-//);
-//var<private> lines: array<LinePrimitive, 2> = array<LinePrimitive, 2>(
-//  LinePrimitive(0.05, vec2<f32>(-1.0, -1.0), vec2<f32>(1.0,  1.0)),
-//  LinePrimitive(0.10, vec2<f32>(-0.5,  0.8), vec2<f32>(0.6, -0.4)),
-//);
 
 [[stage(fragment)]]
 fn fragment_main([[builtin(position)]] screen_pos: vec4<f32>) -> [[location(0)]] vec4<f32> {
