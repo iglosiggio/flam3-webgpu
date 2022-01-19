@@ -530,11 +530,12 @@ const init = async (canvas, starts_running = true) => {
 
   const context = canvas.getContext('webgpu')
 
-  const devicePixelRatio = window.devicePixelRatio || 1
-  const presentationSize = [
-    canvas.clientWidth * devicePixelRatio,
-    canvas.clientHeight * devicePixelRatio
-  ]
+  //const devicePixelRatio = window.devicePixelRatio || 1
+  //const presentationSize = [
+  //  canvas.clientWidth * devicePixelRatio,
+  //  canvas.clientHeight * devicePixelRatio
+  //]
+  const presentationSize = [canvas.width, canvas.height]
   const format = context.getPreferredFormat(adapter)
 
   context.configure({
