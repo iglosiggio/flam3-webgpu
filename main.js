@@ -10,7 +10,8 @@
 ///   4. Plot on the log-density display
 
 class Config {
-  buffer = new ArrayBuffer(24)
+  static SIZE = 32
+  buffer = new ArrayBuffer(this.constructor.SIZE)
 
   _origin = new Float32Array(this.buffer, 0, 2)
   get x()      { return this._origin[0] }
@@ -18,17 +19,23 @@ class Config {
   get y()      { return this._origin[1] }
   set y(value) { this._origin[1] = value }
 
-  _dimensions = new Uint32Array(this.buffer, 8, 2)
-  get width()       { return this._dimensions[0] }
-  set width(value)  { this._dimensions[0] = value }
-  get height()      { return this._dimensions[1] }
-  set height(value) { this._dimensions[1] = value }
+  _histogram_dimensions = new Uint32Array(this.buffer, 8, 2)
+  get width()       { return this._histogram_dimensions[0] }
+  get height()      { return this._histogram_dimensions[1] }
+  set width(value)  { this._histogram_dimensions[0] = value }
+  set height(value) { this._histogram_dimensions[1] = value }
 
-  _frame = new Uint32Array(this.buffer, 16, 1)
+  _output_dimensions = new Float32Array(this.buffer, 16, 2)
+  get output_width()       { return this._output_dimensions[0] }
+  get output_height()      { return this._output_dimensions[1] }
+  set output_width(value)  { this._output_dimensions[0] = value }
+  set output_height(value) { this._output_dimensions[1] = value }
+
+  _frame = new Uint32Array(this.buffer, 24, 1)
   get frame()      { return this._frame[0] }
   set frame(value) { this._frame[0] = value }
 
-  _zoom = new Float32Array(this.buffer, 20, 1)
+  _zoom = new Float32Array(this.buffer, 28, 1)
   get zoom()      { return this._zoom[0] }
   set zoom(value) { this._zoom[0] = value }
 }
@@ -261,7 +268,8 @@ const common_code = `
 
 [[block]] struct CanvasConfiguration {
   origin: vec2<f32>;
-  dimensions: vec2<u32>;
+  histogram_dimensions: vec2<u32>;
+  output_dimensions: vec2<f32>;
   frame: u32;
   zoom: f32;
 };
@@ -363,10 +371,10 @@ fn plot(v: vec2<f32>) {
   let p = (v - config.origin) * config.zoom;
   if (-1. <= p.x && p.x < 1. && -1. <= p.y && p.y < 1.) {
     let ipoint = vec2<u32>(
-      u32((p.x + 1.) / 2. * f32(config.dimensions.x)),
-      u32((p.y + 1.) / 2. * f32(config.dimensions.y))
+      u32((p.x + 1.) / 2. * f32(config.histogram_dimensions.x)),
+      u32((p.y + 1.) / 2. * f32(config.histogram_dimensions.y))
     );
-    let offset = ipoint.y * config.dimensions.x + ipoint.x;
+    let offset = ipoint.y * config.histogram_dimensions.x + ipoint.x;
     atomicAdd(&stage1_histogram.data[offset], 1u);
   }
 }
@@ -380,7 +388,7 @@ fn histogram_max(
   [[builtin(num_workgroups)]] invocation_size: vec3<u32>
 ) {
   // We are only using 1D invocations for now so...
-  let CANVAS_SIZE = config.dimensions.x * config.dimensions.y;
+  let CANVAS_SIZE = config.histogram_dimensions.x * config.histogram_dimensions.y;
   let BLOCK_SIZE = (CANVAS_SIZE + invocation_size.x - 1u) / invocation_size.x;
   let ITERATION_SIZE = min(BLOCK_SIZE * invocation.x + 1u, CANVAS_SIZE);
   var invocation_max: u32 = 0x0u;
@@ -433,12 +441,8 @@ const histogram_fragment_wgsl = `
 ${common_code}
 [[stage(fragment)]]
 fn fragment_main([[builtin(position)]] pos: vec4<f32>) -> [[location(0)]] vec4<f32> {
-  let point = vec2<u32>(
-    u32(pos.x),
-    u32(pos.y)
-  );
-  let i = point.y * config.dimensions.y + point.x;
-  //return vec4<f32>(1.0, abs(sin(f32(fragment_histogram.data[i]) / 40000.0)), 0.0, 1.0);
+  let point = vec2<u32>(pos.xy / config.output_dimensions * vec2<f32>(config.histogram_dimensions));
+  let i = point.y * config.histogram_dimensions.y + point.x;
   let result = f32(fragment_histogram.data[i]);
   let logresult = log(result)/log(f32(fragment_histogram.max));
   return vec4<f32>(logresult, logresult, logresult, 1.0);
@@ -479,8 +483,7 @@ struct CirclePrimitive {
 
 [[stage(fragment)]]
 fn fragment_main([[builtin(position)]] screen_pos: vec4<f32>) -> [[location(0)]] vec4<f32> {
-  let dimensions = vec2<f32>(config.dimensions);
-  let normal_pos = (screen_pos.xy / dimensions * 2.0 - vec2<f32>(1.0)) / config.zoom + config.origin;
+  let normal_pos = (screen_pos.xy / config.output_dimensions * 2.0 - vec2<f32>(1.0)) / config.zoom + config.origin;
   var result = vec4<f32>(0.0); // Black (Transparent)
 
   for (var i = 0u; i < primitives.length; i = i + 1u) {
@@ -530,12 +533,11 @@ const init = async (canvas, starts_running = true) => {
 
   const context = canvas.getContext('webgpu')
 
-  //const devicePixelRatio = window.devicePixelRatio || 1
-  //const presentationSize = [
-  //  canvas.clientWidth * devicePixelRatio,
-  //  canvas.clientHeight * devicePixelRatio
-  //]
-  const presentationSize = [canvas.width, canvas.height]
+  const devicePixelRatio = window.devicePixelRatio || 1
+  const presentationSize = [
+    canvas.clientWidth * devicePixelRatio,
+    canvas.clientHeight * devicePixelRatio
+  ]
   const format = context.getPreferredFormat(adapter)
 
   context.configure({
@@ -639,7 +641,7 @@ const init = async (canvas, starts_running = true) => {
   })
   const configBuffer = device.createBuffer({
     label: 'FLAM3 > Buffer > Configuration',
-    size: 24,
+    size: Config.SIZE,
     usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST
   })
 
@@ -798,8 +800,10 @@ const init = async (canvas, starts_running = true) => {
   })
 
   const config = window.config = new Config
-  config.width = canvas.width
+  config.width  = canvas.width
   config.height = canvas.height
+  config.output_width  = presentationSize[0]
+  config.output_height = presentationSize[1]
   config.zoom = 1
 
   const fractal = new Fractal
