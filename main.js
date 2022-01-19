@@ -1080,8 +1080,8 @@ const init = async (canvas, starts_running = true) => {
   gui.push(default_controls)
   function to_normalized_point(ev) {
     return {
-      x: (ev.clientX / canvas.width  * 2 - 1) / config.zoom + flam3.config.x,
-      y: (ev.clientY / canvas.height * 2 - 1) / config.zoom + flam3.config.y
+      x: (ev.offsetX / canvas.width  * 2 - 1) / config.zoom + flam3.config.x,
+      y: (ev.offsetY / canvas.height * 2 - 1) / config.zoom + flam3.config.y
     }
   }
   canvas.onpointerdown = ev => {
