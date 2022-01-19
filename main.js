@@ -978,12 +978,6 @@ const init = async (canvas, starts_running = true) => {
     device.queue.writeBuffer(configBuffer,     0, config.buffer,     0)
     device.queue.writeBuffer(fractalBuffer,    0, fractal.buffer,    0)
 
-    // GUI
-    device.queue.writeBuffer(primitivesBuffer, 0, primitives.buffer,         0)
-    device.queue.writeBuffer(colorsBuffer,     0, primitives.colors.buffer,  0)
-    device.queue.writeBuffer(linesBuffer,      0, primitives.lines.buffer,   0)
-    device.queue.writeBuffer(circlesBuffer,    0, primitives.circles.buffer, 0)
-
     // Add some points to the histogram
     with_encoder(commandEncoder => {
       const passEncoder = commandEncoder.beginComputePass({
@@ -1022,22 +1016,30 @@ const init = async (canvas, starts_running = true) => {
       passEncoder.endPass()
     })
 
-    // Render the GUI
-    with_encoder(commandEncoder => {
-      const passEncoder = commandEncoder.beginRenderPass({
-        label: 'FLAM3 > Pass > GUI',
-        colorAttachments: [{
-          view: context.getCurrentTexture().createView(),
-          loadValue: 'load',
-          storeOp: 'store'
-        }]
+
+    if (flam3.gui) {
+      device.queue.writeBuffer(primitivesBuffer, 0, primitives.buffer,         0)
+      device.queue.writeBuffer(colorsBuffer,     0, primitives.colors.buffer,  0)
+      device.queue.writeBuffer(linesBuffer,      0, primitives.lines.buffer,   0)
+      device.queue.writeBuffer(circlesBuffer,    0, primitives.circles.buffer, 0)
+
+      // Render the GUI
+      with_encoder(commandEncoder => {
+        const passEncoder = commandEncoder.beginRenderPass({
+          label: 'FLAM3 > Pass > GUI',
+          colorAttachments: [{
+            view: context.getCurrentTexture().createView(),
+            loadValue: 'load',
+            storeOp: 'store'
+          }]
+        })
+        passEncoder.setBindGroup(0, fractalBindGroup)
+        passEncoder.setBindGroup(1, guiBindGroup)
+        passEncoder.setPipeline(guiPipeline)
+        passEncoder.draw(4)
+        passEncoder.endPass()
       })
-      passEncoder.setBindGroup(0, fractalBindGroup)
-      passEncoder.setBindGroup(1, guiBindGroup)
-      passEncoder.setPipeline(guiPipeline)
-      passEncoder.draw(4)
-      passEncoder.endPass()
-    })
+    }
 
     device.queue.submit(commandBuffers)
     if (running) requestAnimationFrame(frame)
@@ -1047,6 +1049,7 @@ const init = async (canvas, starts_running = true) => {
 
   let should_clear_histogram = false
   const flam3 = {
+    gui: true,
     fractal,
     config,
     get isRunning() { return running },
@@ -1065,7 +1068,7 @@ const init = async (canvas, starts_running = true) => {
     flam3.config.zoom *= ev.deltaY < 0 ? 1.1 : 0.9
     flam3.clear()
   }
-  gui.push({
+  const default_controls = {
     pointer_down() { return true },
     pointer_up() { return true },
     pointer_move(_point, ev) {
@@ -1076,7 +1079,8 @@ const init = async (canvas, starts_running = true) => {
       flam3.clear()
       return true
     }
-  })
+  }
+  gui.push(default_controls)
   function to_normalized_point(ev) {
     return {
       x: (ev.clientX / canvas.width  * 2 - 1) / config.zoom + flam3.config.x,
@@ -1085,12 +1089,26 @@ const init = async (canvas, starts_running = true) => {
   }
   canvas.onpointerdown = ev => {
     const normalized_point = to_normalized_point(ev)
-    gui.find(gui_element => gui_element.pointer_down(normalized_point, ev))
-    canvas.onpointermove = ev => gui.find(gui_element => gui_element.pointer_move(to_normalized_point(ev), ev))
+    if (!flam3.gui)
+      default_controls.pointer_down(normalized_point, ev)
+    else
+      gui.find(gui_element => gui_element.pointer_down(normalized_point, ev))
+
+    canvas.onpointermove = ev => {
+      const normalized_point = to_normalized_point(ev)
+      if (!flam3.gui)
+        default_controls.pointer_move(normalized_point, ev)
+      else
+        gui.find(gui_element => gui_element.pointer_move(normalized_point, ev))
+    }
     canvas.setPointerCapture(ev.pointerId)
   }
   canvas.onpointerup = ev => {
-    gui.find(gui_element => gui_element.pointer_up(to_normalized_point(ev), ev))
+    const normalized_point = to_normalized_point(ev)
+    if (!flam3.gui)
+      default_controls.pointer_up(normalized_point, ev)
+    else
+      gui.find(gui_element => gui_element.pointer_up(normalized_point, ev))
     canvas.onpointermove = null
     canvas.releasePointerCapture(ev.pointerId)
   }
