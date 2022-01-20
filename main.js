@@ -2,6 +2,7 @@
 /// 2021 - Ignacio E. Losiggio
 /// Originally based on this example: https://austin-eng.com/webgpu-samples/samples/helloTriangle
 /// Original idea: https://flam3.com/flame_draves.pdf
+/// Also a nice writeup: https://iquilezles.org/www/articles/ifsfractals/ifsfractals.htm
 ///
 /// Stages:
 ///   1. Generate random points
@@ -203,6 +204,21 @@ class Lines extends StructWithFlexibleArrayElement {
     set to_x(value)   { this.buffer[2] = value }
     set to_y(value)   { this.buffer[3] = value }
     set width(value)  { this.buffer[4] = value }
+
+    squared_distance_to(point) {
+      const pa_x = point.x   - this.from_x
+      const pa_y = point.y   - this.from_y
+      const ba_x = this.to_x - this.from_x
+      const ba_y = this.to_y - this.from_y
+      const unclamped_h = (pa_x * ba_x + pa_y * ba_y)
+                        / (ba_x **2 + ba_y ** 2)
+      const h = clamp(unclamped_h, 0, 1)
+      return (pa_x - ba_x * h) ** 2 + (pa_y - ba_y * h) ** 2
+    }
+
+    contains(point) {
+      return this.squared_distance_to(point) < (this.width * 4 / flam3.config.zoom) ** 2
+    }
   }
 }
 class Primitives extends StructWithFlexibleArrayElement {
@@ -491,14 +507,12 @@ fn fragment_main([[builtin(position)]] screen_pos: vec4<f32>) -> [[location(0)]]
     switch (primitive_type) {
       // src: https://iquilezles.org/www/articles/distfunctions2d/distfunctions2d.htm
       case 0u /* LINE_KIND */: {
-        // FIXME: Improve the names of the variables
         let line = lines.data[primitive_index];
-        let line_length: f32 = length(line.to - line.from);
-        let d: vec2<f32> = (line.to - line.from) / line_length;
-        var q: vec2<f32> = normal_pos - (line.from + line.to) * 0.5;
-        q = mat2x2<f32>(d.x, -d.y, d.y, d.x) * q;
-        q = abs(q) - vec2<f32>(line_length, line.width / config.zoom) * 0.5;
-        if (length(max(q, vec2<f32>(0.0))) + min(max(q.x, q.y), 0.0) < 0.0) {
+        let pa = normal_pos - line.from;
+        let ba = line.to - line.from;
+        let h = clamp(dot(pa, ba) / dot(ba, ba), 0.0, 1.0);
+        let dist = length(pa - ba * h);
+        if (dist < line.width / config.zoom / 2.0) {
           result = color;
         }
       }
@@ -514,6 +528,35 @@ fn fragment_main([[builtin(position)]] screen_pos: vec4<f32>) -> [[location(0)]]
   return result;
 }
 `
+
+function project(line, point) {
+  const delta_x = line.from_x - line.to_x
+  const delta_y = line.from_y - line.to_y
+  const squared_length = (delta_x**2 + delta_y**2)
+  const k = ((point.x - line.to_x) * delta_x + (point.y - line.to_y) * delta_y) / squared_length
+  return {
+    x: delta_x * k + line.to_x,
+    y: delta_y * k + line.to_y
+  }
+}
+
+function intersect(l1, l_2) {
+  const l1_delta_x = l1.from_x - l1.to_x
+  const l1_delta_y = l1.from_y - l1.to_y
+  const l2_delta_x = l_2.from_x - l_2.to_x
+  const l2_delta_y = l_2.from_y - l_2.to_y
+  const l1_k = l1.from_x * l1.to_y - l1.from_y * l1.to_x
+  const l2_k = l_2.from_x * l_2.to_y - l_2.from_y * l_2.to_x
+  const d = l1_delta_x * l2_delta_y - l1_delta_y * l2_delta_x
+  return  {
+    x: (l1_k * l2_delta_x - l2_k * l1_delta_x) / d,
+    y: (l1_k * l2_delta_y - l2_k * l1_delta_y) / d
+  }
+}
+
+function clamp(v, min, max) {
+  return Math.min(max, Math.max(min, v))
+}
 
 const init = async (canvas, starts_running = true) => {
   if (navigator.gpu === undefined) {
@@ -822,6 +865,8 @@ const init = async (canvas, starts_running = true) => {
       const transparent_black = { r: 0.0, b: 0.0, g: 0.0, a: 0.0 }
 
       this.xform = xform
+      this.current_drag_data = undefined
+      this.currently_dragging = undefined
 
       this.line_00_10 = primitives.add({
         kind: 0,
@@ -848,6 +893,22 @@ const init = async (canvas, starts_running = true) => {
           width: 0.01,
           from_x: xform.a + xform.c, from_y: xform.d + xform.f,
           to_x:   xform.b + xform.c, to_y:   xform.e + xform.f
+        }
+      })
+      this.ring_00 = primitives.add({
+        kind: 1,
+        color: base_color,
+        shape: {
+          x: xform.c, y: xform.f,
+          r: 0.06
+        }
+      })
+      this.hole_00 = primitives.add({
+        kind: 1,
+        color: translucent_color,
+        shape: {
+          x: xform.c, y: xform.f,
+          r: 0.05
         }
       })
       this.ring_10 = primitives.add({
@@ -882,31 +943,30 @@ const init = async (canvas, starts_running = true) => {
           r: 0.03
         }
       })
-      this.ring_00 = primitives.add({
-        kind: 1,
-        color: base_color,
-        shape: {
-          x: xform.c, y: xform.f,
-          r: 0.06
-        }
-      })
-      this.hole_00 = primitives.add({
-        kind: 1,
-        color: translucent_color,
-        shape: {
-          x: xform.c, y: xform.f,
-          r: 0.05
-        }
-      })
     }
 
     pointer_down(point) {
-      const draggable_elements = [this.ring_00, this.ring_10, this.ring_01]
+      const draggable_elements = [this.ring_10, this.ring_01, this.ring_00, this.line_10_01]
       this.currently_dragging = draggable_elements.find(elem => elem.shape.contains(point))
+      if (this.currently_dragging === this.line_10_01) {
+        const p10_x = this.line_10_01.shape.from_x
+        const p10_y = this.line_10_01.shape.from_y
+        const p01_x = this.line_10_01.shape.to_x
+        const p01_y = this.line_10_01.shape.to_y
+        const p00_x = this.ring_00.shape.x
+        const p00_y = this.ring_00.shape.y
+        this.current_drag_data = {
+          // Cache the triangle shape so we can avoid divide-by-zero issues :)
+          line_00_01: { from_x: p00_x, from_y: p00_y, to_x: p01_x, to_y: p01_y },
+          line_00_10: { from_x: p00_x, from_y: p00_y, to_x: p10_x, to_y: p10_y },
+          line_10_01: { from_x: p10_x, from_y: p10_y, to_x: p01_x, to_y: p01_y },
+        }
+      }
       return this.currently_dragging !== undefined
     }
     pointer_up() {
       this.currently_dragging = undefined
+      this.current_drag_data = undefined
     }
     pointer_move(point) {
       if (this.currently_dragging === undefined) return false
@@ -945,6 +1005,46 @@ const init = async (canvas, starts_running = true) => {
 
         this.ring_10.shape.x = this.hole_10.shape.x = this.line_00_10.shape.to_x = this.line_10_01.shape.from_x = point.x
         this.ring_10.shape.y = this.hole_10.shape.y = this.line_00_10.shape.to_y = this.line_10_01.shape.from_y = point.y
+      }
+      // Scale the triangle
+      if (this.currently_dragging === this.line_10_01) {
+        //
+        // 10'----A------------P-01'
+        //  \     ^            ^ /
+        //   \    |            |/
+        //    \   |            |
+        //     \  |           /|
+        //      \ |          / |
+        //       \|         /  |
+        //       10--------01--P'
+        //         \      /
+        //          \    /
+        //           \  /
+        //            00
+        const P_prime = project(this.current_drag_data.line_10_01, point)
+        const P_to_P_prime = {
+          x: point.x - P_prime.x,
+          y: point.y - P_prime.y
+        }
+        const A_to_P = {
+          from_x: this.current_drag_data.line_10_01.from_x + P_to_P_prime.x,
+          from_y: this.current_drag_data.line_10_01.from_y + P_to_P_prime.y,
+          to_x:   point.x,
+          to_y:   point.y
+        }
+        const p10_prime = intersect(this.current_drag_data.line_00_10, A_to_P)
+        const p01_prime = intersect(this.current_drag_data.line_00_01, A_to_P)
+
+        if (isFinite(p10_prime.x) && isFinite(p10_prime.y) && isFinite(p01_prime.x) && isFinite(p01_prime.y)) {
+          this.ring_10.shape.x = this.hole_10.shape.x = this.line_00_10.shape.to_x = this.line_10_01.shape.from_x = p10_prime.x
+          this.ring_10.shape.y = this.hole_10.shape.y = this.line_00_10.shape.to_y = this.line_10_01.shape.from_y = p10_prime.y
+          this.ring_01.shape.x = this.hole_01.shape.x = this.line_00_01.shape.to_x = this.line_10_01.shape.to_x   = p01_prime.x
+          this.ring_01.shape.y = this.hole_01.shape.y = this.line_00_01.shape.to_y = this.line_10_01.shape.to_y   = p01_prime.y
+          this.xform.a = p10_prime.x - this.xform.c
+          this.xform.b = p01_prime.x - this.xform.c
+          this.xform.d = p10_prime.y - this.xform.f
+          this.xform.e = p01_prime.y - this.xform.f
+        }
       }
       flam3.clear()
       return true
