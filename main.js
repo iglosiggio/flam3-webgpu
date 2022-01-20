@@ -1082,7 +1082,7 @@ const init = async (canvas, starts_running = true) => {
       })
       passEncoder.setBindGroup(0, fractalBindGroup)
       passEncoder.setPipeline(addPointsPipeline)
-      passEncoder.dispatch(20000)
+      passEncoder.dispatch(30000)
       passEncoder.endPass()
     })
 
