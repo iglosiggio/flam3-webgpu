@@ -69,18 +69,7 @@ class Variation {
   constructor(buffer, offset) {
     this._fn_id = new Uint32Array(buffer, offset, 1)
     this._affine_transform = new Float32Array(buffer, offset + 4, 6)
-  }
-
-  set editor(value) {
-    [
-      this._fn_id_element,
-      this._a_element,
-      this._b_element,
-      this._c_element,
-      this._d_element,
-      this._e_element,
-      this._f_element
-    ] = value.querySelectorAll('[slot]')
+    this.editor = undefined
   }
 
   get fn_id() {
@@ -93,7 +82,7 @@ class Variation {
   set fn_id(value) {
     const id = STR_TO_FN_ID.get(value)
     if (id === undefined) throw new Error(`Unknown fn_id string '${value}'`)
-    if (this._fn_id_element) this._fn_id_element.textContent = value
+    if (this.editor) this.editor.setAttribute('variation', value)
     this._fn_id[0] = id
   }
 
@@ -105,27 +94,27 @@ class Variation {
   get f()      { return this._affine_transform[5] }
   set a(value) {
     this._affine_transform[0] = value
-    if (this._a_element) this._a_element.textContent = value
+    if (this.editor) this.editor.setAttribute('a', value)
   }
   set b(value) {
     this._affine_transform[1] = value
-    if (this._b_element) this._b_element.textContent = value
+    if (this.editor) this.editor.setAttribute('b', value)
   }
   set c(value) {
     this._affine_transform[2] = value
-    if (this._c_element) this._c_element.textContent = value
+    if (this.editor) this.editor.setAttribute('c', value)
   }
   set d(value) {
     this._affine_transform[3] = value
-    if (this._d_element) this._d_element.textContent = value
+    if (this.editor) this.editor.setAttribute('d', value)
   }
   set e(value) {
     this._affine_transform[4] = value
-    if (this._e_element) this._e_element.textContent = value
+    if (this.editor) this.editor.setAttribute('e', value)
   }
   set f(value) {
     this._affine_transform[5] = value
-    if (this._f_element) this._f_element.textContent = value
+    if (this.editor) this.editor.setAttribute('f', value)
   }
 }
 
@@ -140,10 +129,8 @@ class Fractal extends StructWithFlexibleArrayElement {
   set length(value) { return this._length[0] = value }
 
   add(props) {
-    const variation = super.add({
-      get editor() { return add_variation_editor() },
-      ...props
-    })
+    const variation = super.add(props)
+    add_variation_editor(variation)
     return variation
   }
 }
