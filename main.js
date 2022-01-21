@@ -946,7 +946,7 @@ const init = async (canvas, starts_running = true) => {
     }
 
     pointer_down(point) {
-      const draggable_elements = [this.ring_10, this.ring_01, this.ring_00, this.line_10_01]
+      const draggable_elements = [this.ring_10, this.ring_01, this.ring_00, this.line_10_01, this.line_00_01, this.line_00_10]
       this.currently_dragging = draggable_elements.find(elem => elem.shape.contains(point))
       if (this.currently_dragging === this.line_10_01) {
         const p10_x = this.line_10_01.shape.from_x
@@ -1045,6 +1045,52 @@ const init = async (canvas, starts_running = true) => {
           this.xform.d = p10_prime.y - this.xform.f
           this.xform.e = p01_prime.y - this.xform.f
         }
+      }
+      if (this.currently_dragging === this.line_00_01) {
+        const p00_A_x  = point.x - this.ring_00.shape.x
+        const p00_A_y  = point.y - this.ring_00.shape.y
+        const p00_01_x = this.ring_00.shape.x - this.ring_01.shape.x
+        const p00_01_y = this.ring_00.shape.y - this.ring_01.shape.y
+        const p00_10_x = this.ring_00.shape.x - this.ring_10.shape.x
+        const p00_10_y = this.ring_00.shape.y - this.ring_10.shape.y
+        const squared_length_p00_A  = p00_A_x  ** 2 + p00_A_y  ** 2
+        const squared_length_p00_01 = p00_01_x ** 2 + p00_01_y ** 2
+        const dot_product = p00_A_x * p00_01_x + p00_A_y * p00_01_y
+        const cos_alpha = dot_product / Math.sqrt(squared_length_p00_A * squared_length_p00_01)
+        const sign = Math.sign(p00_01_x * p00_A_y - p00_A_x * p00_01_y)
+        const alpha = Math.acos(cos_alpha)
+        const sin_alpha = Math.sin(alpha) * sign
+        this.xform.a = cos_alpha * p00_10_x - sin_alpha * p00_10_y
+        this.xform.b = cos_alpha * p00_01_x - sin_alpha * p00_01_y
+        this.xform.d = sin_alpha * p00_10_x + cos_alpha * p00_10_y
+        this.xform.e = sin_alpha * p00_01_x + cos_alpha * p00_01_y
+        this.ring_10.shape.x = this.hole_10.shape.x = this.line_00_10.shape.to_x = this.line_10_01.shape.from_x = this.xform.a + this.xform.c
+        this.ring_10.shape.y = this.hole_10.shape.y = this.line_00_10.shape.to_y = this.line_10_01.shape.from_y = this.xform.d + this.xform.f
+        this.ring_01.shape.x = this.hole_01.shape.x = this.line_00_01.shape.to_x = this.line_10_01.shape.to_x   = this.xform.b + this.xform.c
+        this.ring_01.shape.y = this.hole_01.shape.y = this.line_00_01.shape.to_y = this.line_10_01.shape.to_y   = this.xform.e + this.xform.f
+      }
+      if (this.currently_dragging === this.line_00_10) {
+        const p00_A_x  = point.x - this.ring_00.shape.x
+        const p00_A_y  = point.y - this.ring_00.shape.y
+        const p00_01_x = this.ring_00.shape.x - this.ring_01.shape.x
+        const p00_01_y = this.ring_00.shape.y - this.ring_01.shape.y
+        const p00_10_x = this.ring_00.shape.x - this.ring_10.shape.x
+        const p00_10_y = this.ring_00.shape.y - this.ring_10.shape.y
+        const squared_length_p00_A  = p00_A_x  ** 2 + p00_A_y  ** 2
+        const squared_length_p00_10 = p00_10_x ** 2 + p00_10_y ** 2
+        const dot_product = p00_A_x * p00_10_x + p00_A_y * p00_10_y
+        const cos_alpha = dot_product / Math.sqrt(squared_length_p00_A * squared_length_p00_10)
+        const sign = Math.sign(p00_10_x * p00_A_y - p00_A_x * p00_10_y)
+        const alpha = Math.acos(cos_alpha)
+        const sin_alpha = Math.sin(alpha) * sign
+        this.xform.a = cos_alpha * p00_10_x - sin_alpha * p00_10_y
+        this.xform.b = cos_alpha * p00_01_x - sin_alpha * p00_01_y
+        this.xform.d = sin_alpha * p00_10_x + cos_alpha * p00_10_y
+        this.xform.e = sin_alpha * p00_01_x + cos_alpha * p00_01_y
+        this.ring_10.shape.x = this.hole_10.shape.x = this.line_00_10.shape.to_x = this.line_10_01.shape.from_x = this.xform.a + this.xform.c
+        this.ring_10.shape.y = this.hole_10.shape.y = this.line_00_10.shape.to_y = this.line_10_01.shape.from_y = this.xform.d + this.xform.f
+        this.ring_01.shape.x = this.hole_01.shape.x = this.line_00_01.shape.to_x = this.line_10_01.shape.to_x   = this.xform.b + this.xform.c
+        this.ring_01.shape.y = this.hole_01.shape.y = this.line_00_01.shape.to_y = this.line_10_01.shape.to_y   = this.xform.e + this.xform.f
       }
       flam3.clear()
       return true
