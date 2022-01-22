@@ -6,21 +6,34 @@
         </script>
         <meta http-equiv="origin-trial" content="Athxt2w9w8TlIoxz7sUGbJxSP3CxVd1k92JUkY07sUajpbpVhPBjYt/N3lHPr77aRO+LQDCruKyh4hiJ6xYf8woAAABUeyJvcmlnaW4iOiJodHRwczovL2lnbG9zaWdnaW8uZ2l0aHViLmlvOjQ0MyIsImZlYXR1cmUiOiJXZWJHUFUiLCJleHBpcnkiOjE2NTI4MzE5OTl9">
         <style>
-            @media (min-width: 1800px) {
-                body { columns: 2; }
-            }
-            xform-editor {
-                display: block;
-                margin: 1em 1em;
-            }
-            #xforms {
-                display: inline-block;
-            }
-            #fractal-viewer {
+            body {
+                font-family: sans-serif;
                 text-align: center;
+                background-color: rgb(72, 61, 139);
+            }
+            #fractal-viewer, #xforms {
+                display: inline-block;
+                vertical-align: middle;
             }
             #controls {
+                text-align: center;
                 margin-bottom: 0.4em;
+            }
+            #xforms {
+                background-color: rgb(166, 152, 252);
+                border-radius: 0px 10px 30px 10px;
+            }
+            xform-editor {
+                text-align: left;
+                display: block;
+                padding: 1em 1em;
+
+                border-color: rgb(72, 61, 139);
+                border-style: dashed;
+                border-width: 0.0em 0em 0.01em 0em;
+            }
+            xform-editor:last-child {
+                border-width: 0em;
             }
         </style>
     </head>
@@ -35,29 +48,43 @@
                     border-width: 0em 0.01em 0em 0.01em;
                     border-radius: 0.3em;
                 }
+                .affine-transform {
+                    display: block;
+                    min-width: 200px;
+                    margin-top: 0.2em;
+                }
+                .vector td {
+                    text-align: right;
+                }
             </style>
-            Variation:
+            <i>Variation:</i>
             <select>
                 <option>linear</option>
                 <option>sinusoidal</option>
                 <option>eyefish</option>
             </select>
             <!-- TODO: <button>Remove</button> --><br/>
-            <table class="vector">
-                <tr>
-                    <td><slot name="a">a</slot></td>
-                    <td><slot name="b">b</slot></td>
-                </tr>
-                <tr>
-                    <td><slot name="d">d</slot></td>
-                    <td><slot name="e">e</slot></td>
-                </tr>
-            </table>
-            x +
-            <table class="vector">
-                <tr><td><slot name="c">c</slot></td></tr>
-                <tr><td><slot name="f">f</slot></td></tr>
-            </table></br>
+            <div class="affine-transform">
+                <table class="vector">
+                    <tr>
+                        <td><slot name="a">a</slot></td>
+                        <td><slot name="b">b</slot></td>
+                    </tr>
+                    <tr>
+                        <td><slot name="d">d</slot></td>
+                        <td><slot name="e">e</slot></td>
+                    </tr>
+                </table>
+                <table class="vector">
+                    <tr><td>x</td></tr>
+                    <tr><td>y</td></tr>
+                </table>
+                 +
+                <table class="vector">
+                    <tr><td><slot name="c">c</slot></td></tr>
+                    <tr><td><slot name="f">f</slot></td></tr>
+                </table>
+            </div>
         </template>
         <h1 id="webgpu-not-supported-error" style="display: none;">WebGPU support was not detected</h1>
         <h1 id="webgpu-no-device-error" style="display: none;">No WebGPU device is available</h1>
@@ -108,12 +135,12 @@
             function add_variation_editor(xform) {
                 const elem = document.createElement('xform-editor')
                 elem.setAttribute('variation', xform.fn_id)
-                elem.setAttribute('a', xform.a)
-                elem.setAttribute('b', xform.b)
-                elem.setAttribute('c', xform.c)
-                elem.setAttribute('d', xform.d)
-                elem.setAttribute('e', xform.e)
-                elem.setAttribute('f', xform.f)
+                elem.setAttribute('a', xform.a.toFixed(2))
+                elem.setAttribute('b', xform.b.toFixed(2))
+                elem.setAttribute('c', xform.c.toFixed(2))
+                elem.setAttribute('d', xform.d.toFixed(2))
+                elem.setAttribute('e', xform.e.toFixed(2))
+                elem.setAttribute('f', xform.f.toFixed(2))
                 elem.xform = xform
                 xform.editor = elem
                 document.getElementById('xforms').appendChild(elem)

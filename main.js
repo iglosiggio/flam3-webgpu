@@ -94,27 +94,27 @@ class Variation {
   get f()      { return this._affine_transform[5] }
   set a(value) {
     this._affine_transform[0] = value
-    if (this.editor) this.editor.setAttribute('a', value)
+    if (this.editor) this.editor.setAttribute('a', value.toFixed(2))
   }
   set b(value) {
     this._affine_transform[1] = value
-    if (this.editor) this.editor.setAttribute('b', value)
+    if (this.editor) this.editor.setAttribute('b', value.toFixed(2))
   }
   set c(value) {
     this._affine_transform[2] = value
-    if (this.editor) this.editor.setAttribute('c', value)
+    if (this.editor) this.editor.setAttribute('c', value.toFixed(2))
   }
   set d(value) {
     this._affine_transform[3] = value
-    if (this.editor) this.editor.setAttribute('d', value)
+    if (this.editor) this.editor.setAttribute('d', value.toFixed(2))
   }
   set e(value) {
     this._affine_transform[4] = value
-    if (this.editor) this.editor.setAttribute('e', value)
+    if (this.editor) this.editor.setAttribute('e', value.toFixed(2))
   }
   set f(value) {
     this._affine_transform[5] = value
-    if (this.editor) this.editor.setAttribute('f', value)
+    if (this.editor) this.editor.setAttribute('f', value.toFixed(2))
   }
 }
 
