@@ -32,7 +32,6 @@
             }
             #controls {
                 text-align: center;
-                margin-bottom: 0.4em;
             }
             #xforms {
                 background-color: rgb(166, 152, 252);
@@ -106,6 +105,9 @@
             <h1 id="webgpu-not-supported-error" style="display: none;">WebGPU support was not detected</h1>
             <h1 id="webgpu-no-device-error" style="display: none;">No WebGPU device is available</h1>
             <div id="fractal-viewer">
+                <canvas id="output" width="900" height="900">
+                    Sorry, your browser has no canvas support
+                </canvas>
                 <div id="controls">
                     <button onclick="flam3.start()"          id="flam3-start">Start     </button>
                     <button onclick="flam3.stop()"           id="flam3-stop" >Stop      </button>
@@ -113,9 +115,6 @@
                     <button onclick="flam3.clear()"          id="flam3-clear">Clear     </button>
                     <button onclick="flam3.gui = !flam3.gui" id="flam3-gui"  >Toggle GUI</button>
                 </div>
-                <canvas id="output" width="900" height="900">
-                    Sorry, your browser has no canvas support
-                </canvas><br/>
             </div>
             <div id="xforms"></div>
         </main>
