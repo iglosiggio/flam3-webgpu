@@ -61,6 +61,7 @@ Object.setPrototypeOf(StructWithFlexibleArrayElement.prototype, Array.prototype)
 const FN_ID_TO_STR_ENTRIES = [
   [ 0, 'linear'],
   [ 1, 'sinusoidal'],
+  [13, 'julia'],
   [27, 'eyefish']
 ];
 const FN_ID_TO_STR = new Map(FN_ID_TO_STR_ENTRIES)
@@ -326,6 +327,8 @@ fn apply_transform(p: vec2<f32>, transform: AffineTransform) -> vec2<f32> {
   );
 }
 
+let PI = 3.1415926535897932384626433;
+
 let LINEAR_FN = 0u;
 fn linear(p: vec2<f32>) -> vec2<f32> {
   return p;
@@ -334,6 +337,17 @@ fn linear(p: vec2<f32>) -> vec2<f32> {
 let SINUSOIDAL_FN = 1u;
 fn sinusoidal(p: vec2<f32>) -> vec2<f32> {
   return vec2<f32>(sin(p.x), sin(p.y));
+}
+
+let JULIA_FN = 13u;
+fn julia(p: vec2<f32>) -> vec2<f32> {
+  let phi_over_two = atan2(p.x, p.y) / 2.0;
+  let omega = f32((random() & 1u) == 0u) * PI;
+
+  return sqrt(length(p)) * vec2<f32>(
+    cos(phi_over_two + omega),
+    sin(phi_over_two + omega)
+  );
 }
 
 let EYEFISH_FN = 27u;
@@ -346,6 +360,7 @@ fn apply_fn(fn_id: u32, p: vec2<f32>) -> vec2<f32> {
   switch (fn_id) {
     case  0u: { return linear(p);     }
     case  1u: { return sinusoidal(p); }
+    case 13u: { return julia(p); }
     case 27u: { return eyefish(p); }
     default: {}
   }
