@@ -8,12 +8,27 @@
         <style>
             body {
                 font-family: sans-serif;
+                margin: 0;
+                background-color: rgb(255, 255, 255);
+            }
+            .intro {
+                margin: auto;
+                max-width: 700px;
+            }
+            .intro h1, .intro h2, .intro h3 {
+                text-align: right;
+                line-height: 0.5em;
+            }
+            main {
+                width: 100%;
                 text-align: center;
                 background-color: rgb(72, 61, 139);
             }
             #fractal-viewer, #xforms {
                 display: inline-block;
                 vertical-align: middle;
+                margin-top: 0.4em;
+                margin-bottom: 0.4em;
             }
             #controls {
                 text-align: center;
@@ -86,21 +101,30 @@
                 </table>
             </div>
         </template>
-        <h1 id="webgpu-not-supported-error" style="display: none;">WebGPU support was not detected</h1>
-        <h1 id="webgpu-no-device-error" style="display: none;">No WebGPU device is available</h1>
-        <div id="fractal-viewer">
-            <div id="controls">
-                <button onclick="flam3.start()"          id="flam3-start">Start     </button>
-                <button onclick="flam3.stop()"           id="flam3-stop" >Stop      </button>
-                <button onclick="flam3.step()"           id="flam3-step" >Step      </button>
-                <button onclick="flam3.clear()"          id="flam3-clear">Clear     </button>
-                <button onclick="flam3.gui = !flam3.gui" id="flam3-gui"  >Toggle GUI</button>
+        <main>
+            <h1 id="webgpu-not-supported-error" style="display: none;">WebGPU support was not detected</h1>
+            <h1 id="webgpu-no-device-error" style="display: none;">No WebGPU device is available</h1>
+            <div id="fractal-viewer">
+                <div id="controls">
+                    <button onclick="flam3.start()"          id="flam3-start">Start     </button>
+                    <button onclick="flam3.stop()"           id="flam3-stop" >Stop      </button>
+                    <button onclick="flam3.step()"           id="flam3-step" >Step      </button>
+                    <button onclick="flam3.clear()"          id="flam3-clear">Clear     </button>
+                    <button onclick="flam3.gui = !flam3.gui" id="flam3-gui"  >Toggle GUI</button>
+                </div>
+                <canvas id="output" width="900" height="900">
+                    Sorry, your browser has no canvas support
+                </canvas><br/>
             </div>
-            <canvas id="output" width="900" height="900">
-                Sorry, your browser has no canvas support
-            </canvas><br/>
+            <div id="xforms"></div>
+        </main>
+        <div class="intro">
+<h1>What the hell is that?</h1>
+<h2>Alternative title: <i>"Easy FLAM3 fractal rendering on WebGPU"</i></h2>
+<h3>by mega</h3>
+<p>At some point I will put some explanation of how the implementation works and what the triangles mean. For now you can check the <a href="https://flam3.com/flame_draves.pdf">original paper</a> and the <a href="https://github.com/iglosiggio/flam3-webgpu">sources for this site</a>. If something is still unclear feel free to reach out to me :)</p>
+<p>The implementation is made on <a href="https://tc39.es/ecma262/">JavaScript</a> and <a href="https://gpuweb.github.io/gpuweb/">WebGPU</a> (using <a href="https://gpuweb.github.io/gpuweb/wgsl/">WGSL</a> shaders).</p>
         </div>
-        <div id="xforms"></div>
         <script type="text/javascript">
             customElements.define('xform-editor', class extends HTMLElement {
                 static get observedAttributes() {
