@@ -37,7 +37,7 @@
                 background-color: rgb(166, 152, 252);
                 border-radius: 0px 10px 30px 10px;
             }
-            xform-editor {
+            xform-editor, #add-xform {
                 text-align: left;
                 display: block;
                 padding: 1em 1em;
@@ -48,6 +48,18 @@
             }
             xform-editor:last-child {
                 border-width: 0em;
+            }
+            #add-xform {
+                border-radius: 0px 10px 0px 0px;
+                text-align: center;
+                width: 100%;
+                background-color: transparent;
+            }
+            #add-xform:hover {
+                background-color: rgba(255, 255, 255, 0.25);
+            }
+            #add-xform:active {
+                background-color: rgba(255, 255, 255, 0.5);
             }
         </style>
     </head>
@@ -116,7 +128,9 @@
                     <button onclick="flam3.gui = !flam3.gui" id="flam3-gui"  >Toggle GUI</button>
                 </div>
             </div>
-            <div id="xforms"></div>
+            <div id="xforms">
+                <button id="add-xform">Add XForm</button>
+            </div>
         </main>
         <div class="intro">
 <h1>What the hell is that?</h1>

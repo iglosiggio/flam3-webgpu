@@ -1139,6 +1139,10 @@ const init = async (canvas, starts_running = true) => {
   for (let i = 0; i < fractal.length; i++)
     gui.push(new XFormEditor(fractal[i], primitives, xform_list, { r: 1.0, g: 0.4, b: 0.1, a: 1.0 }))
   gui.reverse()
+  document.getElementById('add-xform').onclick = () => {
+    const xform = fractal.add({ variation: 'linear', a: 1, b: 0, c: 0, d: 0, e: 1, f: 0 })
+    gui.splice(0, 0, new XFormEditor(xform, primitives, xform_list, { r: 1.0, g: 0.4, b: 0.1, a: 1.0 }))
+  }
 
   let running = starts_running
   function frame() {
