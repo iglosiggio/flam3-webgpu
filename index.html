@@ -78,7 +78,7 @@
                 <option>julia</option>
                 <option>eyefish</option>
             </select>
-            <!-- TODO: <button>Remove</button> --><br/>
+            <button>Remove</button>
             <div class="affine-transform">
                 <table class="vector">
                     <tr>
@@ -137,13 +137,6 @@
                     this.attachShadow({mode: 'open'})
                         .appendChild(template.cloneNode(true));
                     this.xform = undefined
-                    this.shadowRoot.querySelector('select').onchange = ev => this.variation_changed(ev)
-                }
-                variation_changed(ev) {
-                    if (this.xform !== undefined) {
-                        this.xform.fn_id = ev.srcElement.value
-                        flam3.clear()
-                    }
                 }
                 attributeChangedCallback(name, oldValue, newValue) {
                     if (this.constructor.observedAttributes.includes(name))
@@ -155,21 +148,6 @@
                         console.warn(`Unknown attribute ${name} changed from ${oldValue} to ${newValue}`)
                 }
             });
-
-            function add_variation_editor(xform) {
-                const elem = document.createElement('xform-editor')
-                elem.setAttribute('variation', xform.fn_id)
-                elem.setAttribute('a', xform.a.toFixed(2))
-                elem.setAttribute('b', xform.b.toFixed(2))
-                elem.setAttribute('c', xform.c.toFixed(2))
-                elem.setAttribute('d', xform.d.toFixed(2))
-                elem.setAttribute('e', xform.e.toFixed(2))
-                elem.setAttribute('f', xform.f.toFixed(2))
-                elem.xform = xform
-                xform.editor = elem
-                document.getElementById('xforms').appendChild(elem)
-                return elem
-            }
         </script>
     </body>
 </html>

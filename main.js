@@ -35,139 +35,130 @@ class Config {
 }
 
 class StructWithFlexibleArrayElement {
-  static get SIZE() { return this.BASE_SIZE + this.ELEMENT_SIZE * this.MAX_ELEMENTS }
-  buffer = new ArrayBuffer(this.constructor.BASE_SIZE + this.constructor.ELEMENT_SIZE * this.constructor.MAX_ELEMENTS)
+  static get SIZE() { return this.BASE_SIZE + this.Element.SIZE * this.MAX_ELEMENTS }
+  buffer = new ArrayBuffer(this.constructor.BASE_SIZE + this.constructor.Element.SIZE * this.constructor.MAX_ELEMENTS)
   constructor() {
-    if (!'length' in this) this.length = 0
-  }
-
-  at(idx) {
-    if (idx < 0 || this.length <= idx)
-      throw new Error('Index out of bounds!')
-    return this[idx]
+    const proto = Object.getPrototypeOf(this)
+    if (!proto.hasOwnProperty('length'))
+      this.length = 0
   }
 
   add(props) {
     if (this.length === this.constructor.MAX_ELEMENTS)
       throw new Error(`${this.constructor.Element.name} limit exceeded!`)
-    const element = this[this.length] = new this.constructor.Element(this.buffer, this.constructor.BASE_SIZE + this.constructor.ELEMENT_SIZE * this.length)
-    this.length++
+    const view = new DataView(this.buffer, this.constructor.BASE_SIZE + this.constructor.Element.SIZE * this.length, this.constructor.Element.SIZE)
+    const element = this[this.length] = new this.constructor.Element(view)
     Object.assign(element, props)
+    this.length++
     return element
   }
-}
-Object.setPrototypeOf(StructWithFlexibleArrayElement.prototype, Array.prototype)
 
-const FN_ID_TO_STR_ENTRIES = [
+  findIndex(obj) {
+    for (let i = 0; i < this.length; i++)
+      if (this[i] === obj)
+        return i
+  }
+
+  remove(from, to) {
+    if (typeof from === 'object')
+      from = this.findIndex(from)
+    if (typeof to === 'object')
+      to = this.findIndex(to) + 1
+    else if (to === undefined)
+      to = from + 1
+
+    if (from === undefined || to === undefined)
+      throw new Error('Start and/or end objects were not found')
+
+    const byte_view = new Uint8Array(this.buffer)
+    byte_view.copyWithin(
+      this.constructor.BASE_SIZE + this.constructor.Element.SIZE * from,
+      this.constructor.BASE_SIZE + this.constructor.Element.SIZE * to,
+      this.constructor.BASE_SIZE + this.constructor.Element.SIZE * this.length
+    )
+    Array.prototype.splice.call(this, from, to - from)
+    for (let i = from; i < this.length; i++)
+      this[i].view = new DataView(this.buffer, this.constructor.BASE_SIZE + this.constructor.Element.SIZE * i)
+  }
+}
+
+const VARIATION_ID_TO_STR_ENTRIES = [
   [ 0, 'linear'],
   [ 1, 'sinusoidal'],
   [13, 'julia'],
   [27, 'eyefish']
 ];
-const FN_ID_TO_STR = new Map(FN_ID_TO_STR_ENTRIES)
-const STR_TO_FN_ID = new Map(FN_ID_TO_STR_ENTRIES.map(([a, b]) => [b, a]))
-class Variation {
-  constructor(buffer, offset) {
-    this._fn_id = new Uint32Array(buffer, offset, 1)
-    this._affine_transform = new Float32Array(buffer, offset + 4, 6)
-    this.editor = undefined
-  }
+const VARIATION_ID_TO_STR = new Map(VARIATION_ID_TO_STR_ENTRIES)
+const STR_TO_VARIATION_ID = new Map(VARIATION_ID_TO_STR_ENTRIES.map(([a, b]) => [b, a]))
+class XForm {
+  static SIZE = 28
+  constructor(view) { this.view = view }
 
-  get fn_id() {
-    const id = this._fn_id[0]
-    const result = FN_ID_TO_STR.get(id)
-    if (result === undefined) throw new Error(`Unknown fn_id '${id}'`)
+  get variation() {
+    const id = this.view.getUint32(0, true)
+    const result = VARIATION_ID_TO_STR.get(id)
+    if (result === undefined) throw new Error(`Unknown variation id ${id}`)
     return result
   }
 
-  set fn_id(value) {
-    const id = STR_TO_FN_ID.get(value)
-    if (id === undefined) throw new Error(`Unknown fn_id string '${value}'`)
-    if (this.editor) this.editor.setAttribute('variation', value)
-    this._fn_id[0] = id
+  set variation(value) {
+    const id = STR_TO_VARIATION_ID.get(value)
+    if (id === undefined) throw new Error(`Unknown id for variation string '${value}'`)
+    this.view.setUint32(0, id, true)
   }
 
-  get a()      { return this._affine_transform[0] }
-  get b()      { return this._affine_transform[1] }
-  get c()      { return this._affine_transform[2] }
-  get d()      { return this._affine_transform[3] }
-  get e()      { return this._affine_transform[4] }
-  get f()      { return this._affine_transform[5] }
-  set a(value) {
-    this._affine_transform[0] = value
-    if (this.editor) this.editor.setAttribute('a', value.toFixed(2))
-  }
-  set b(value) {
-    this._affine_transform[1] = value
-    if (this.editor) this.editor.setAttribute('b', value.toFixed(2))
-  }
-  set c(value) {
-    this._affine_transform[2] = value
-    if (this.editor) this.editor.setAttribute('c', value.toFixed(2))
-  }
-  set d(value) {
-    this._affine_transform[3] = value
-    if (this.editor) this.editor.setAttribute('d', value.toFixed(2))
-  }
-  set e(value) {
-    this._affine_transform[4] = value
-    if (this.editor) this.editor.setAttribute('e', value.toFixed(2))
-  }
-  set f(value) {
-    this._affine_transform[5] = value
-    if (this.editor) this.editor.setAttribute('f', value.toFixed(2))
-  }
+  get a()      { return this.view.getFloat32( 4, true) }
+  get b()      { return this.view.getFloat32( 8, true) }
+  get c()      { return this.view.getFloat32(12, true) }
+  get d()      { return this.view.getFloat32(16, true) }
+  get e()      { return this.view.getFloat32(20, true) }
+  get f()      { return this.view.getFloat32(24, true) }
+  set a(value) { this.view.setFloat32( 4, value, true) }
+  set b(value) { this.view.setFloat32( 8, value, true) }
+  set c(value) { this.view.setFloat32(12, value, true) }
+  set d(value) { this.view.setFloat32(16, value, true) }
+  set e(value) { this.view.setFloat32(20, value, true) }
+  set f(value) { this.view.setFloat32(24, value, true) }
 }
 
 class Fractal extends StructWithFlexibleArrayElement {
   static BASE_SIZE = 4
-  static ELEMENT_SIZE = 28
   static MAX_ELEMENTS = 128
-  static Element = Variation
+  static Element = XForm
 
   _length = new Uint32Array(this.buffer, 0, 1)
   get length()      { return this._length[0] }
   set length(value) { return this._length[0] = value }
-
-  add(props) {
-    const variation = super.add(props)
-    add_variation_editor(variation)
-    return variation
-  }
 }
 
 class Colors extends StructWithFlexibleArrayElement {
   static BASE_SIZE = 0
-  static ELEMENT_SIZE = 16
   static MAX_ELEMENTS = 256
   static Element = class Color {
-    constructor(buffer, offset) {
-      this.buffer = new Float32Array(buffer, offset, 4)
-    }
-    get r() { return this.buffer[0] }
-    get g() { return this.buffer[1] }
-    get b() { return this.buffer[2] }
-    get a() { return this.buffer[3] }
-    set r(value) { this.buffer[0] = value }
-    set g(value) { this.buffer[1] = value }
-    set b(value) { this.buffer[2] = value }
-    set a(value) { this.buffer[3] = value }
+    static SIZE = 16
+    constructor(view) { this.view = view }
+    get r() { return this.view.getFloat32( 0, true) }
+    get g() { return this.view.getFloat32( 4, true) }
+    get b() { return this.view.getFloat32( 8, true) }
+    get a() { return this.view.getFloat32(12, true) }
+    set r(value) { this.view.setFloat32( 0, value, true) }
+    set g(value) { this.view.setFloat32( 4, value, true) }
+    set b(value) { this.view.setFloat32( 8, value, true) }
+    set a(value) { this.view.setFloat32(12, value, true) }
   }
 }
 class Circles extends StructWithFlexibleArrayElement {
   static BASE_SIZE = 0
-  static ELEMENT_SIZE = 16
   static MAX_ELEMENTS = 128
   static Element = class Circle {
-    constructor(buffer, offset) {
-      this.buffer = new Float32Array(buffer, offset, 3)
-    }
-    get x() { return this.buffer[0] }
-    get y() { return this.buffer[1] }
-    get r() { return this.buffer[2] }
-    set x(value) { this.buffer[0] = value }
-    set y(value) { this.buffer[1] = value }
-    set r(value) { this.buffer[2] = value }
+    static SIZE = 16
+    constructor(view) { this.view = view }
+    get x() { return this.view.getFloat32(0, true) }
+    get y() { return this.view.getFloat32(4, true) }
+    get r() { return this.view.getFloat32(8, true) }
+    set x(value) { this.view.setFloat32(0, value, true) }
+    set y(value) { this.view.setFloat32(4, value, true) }
+    set r(value) { this.view.setFloat32(8, value, true) }
 
     contains(point) {
       return (this.x - point.x) ** 2 + (this.y - point.y) ** 2 < (this.r / flam3.config.zoom) ** 2
@@ -176,22 +167,20 @@ class Circles extends StructWithFlexibleArrayElement {
 }
 class Lines extends StructWithFlexibleArrayElement {
   static BASE_SIZE = 0
-  static ELEMENT_SIZE = 24
   static MAX_ELEMENTS = 128
-  static Element = class Circle {
-    constructor(buffer, offset) {
-      this.buffer = new Float32Array(buffer, offset, 5)
-    }
-    get from_x() { return this.buffer[0] }
-    get from_y() { return this.buffer[1] }
-    get to_x()   { return this.buffer[2] }
-    get to_y()   { return this.buffer[3] }
-    get width()  { return this.buffer[4] }
-    set from_x(value) { this.buffer[0] = value }
-    set from_y(value) { this.buffer[1] = value }
-    set to_x(value)   { this.buffer[2] = value }
-    set to_y(value)   { this.buffer[3] = value }
-    set width(value)  { this.buffer[4] = value }
+  static Element = class Line {
+    static SIZE = 24
+    constructor(view) { this.view = view }
+    get from_x() { return this.view.getFloat32( 0, true) }
+    get from_y() { return this.view.getFloat32( 4, true) }
+    get to_x()   { return this.view.getFloat32( 8, true) }
+    get to_y()   { return this.view.getFloat32(12, true) }
+    get width()  { return this.view.getFloat32(16, true) }
+    set from_x(value) { this.view.setFloat32( 0, value, true) }
+    set from_y(value) { this.view.setFloat32( 4, value, true) }
+    set to_x(value)   { this.view.setFloat32( 8, value, true) }
+    set to_y(value)   { this.view.setFloat32(12, value, true) }
+    set width(value)  { this.view.setFloat32(16, value, true) }
 
     squared_distance_to(point) {
       const pa_x = point.x   - this.from_x
@@ -211,17 +200,21 @@ class Lines extends StructWithFlexibleArrayElement {
 }
 class Primitives extends StructWithFlexibleArrayElement {
   static BASE_SIZE = 4
-  static ELEMENT_SIZE = 4
   static MAX_ELEMENTS = 256
   static Element = class Primitive {
-    constructor(buffer, offset) {
-      this.buffer = new Uint32Array(buffer, offset, 1)
+    static SIZE = 4
+    constructor(view) { this._view = view }
+
+    get view() { return this._view }
+    set view(value) {
+      this._view = value
+      this.index = this.shape.view.byteOffset / this.shape.constructor.SIZE
     }
 
-    get kind()  { return this.buffer[0] & 0x0000FFFF }
-    get index() { return this.buffer[0] >> 16 }
-    set kind(value)  { this.buffer[0] = this.buffer[0] & 0xFFFF0000 | value }
-    set index(value) { this.buffer[0] = this.buffer[0] & 0x0000FFFF | (value << 16) }
+    get kind()  { return this.view.getUint16(0, true) }
+    get index() { return this.view.getUint16(2, true) }
+    set kind(value)  { this.view.setUint16(0, value, true) }
+    set index(value) { this.view.setUint16(2, value, true) }
   }
 
   constructor() {
@@ -280,14 +273,14 @@ struct AffineTransform {
   f: f32;
 };
 
-struct Variation {
-  fn_id: u32;
+struct XForm {
+  variation_id: u32;
   transform: AffineTransform;
 };
 
 [[block]] struct Fractal {
   size: u32;
-  variations: array<Variation>;
+  xforms: array<XForm>;
 };
 
 [[group(0), binding(0)]] var<storage, read_write> stage1_histogram: Stage1Histogram;
@@ -356,8 +349,8 @@ fn eyefish(p: vec2<f32>) -> vec2<f32> {
   return v * p;
 }
 
-fn apply_fn(fn_id: u32, p: vec2<f32>) -> vec2<f32> {
-  switch (fn_id) {
+fn apply_fn(variation_id: u32, p: vec2<f32>) -> vec2<f32> {
+  switch (variation_id) {
     case  0u: { return linear(p);     }
     case  1u: { return sinusoidal(p); }
     case 13u: { return julia(p); }
@@ -368,13 +361,13 @@ fn apply_fn(fn_id: u32, p: vec2<f32>) -> vec2<f32> {
   return vec2<f32>(0.0, 0.0);
 }
 
-fn apply_variation(variation: Variation, p: vec2<f32>) -> vec2<f32> {
-  return apply_fn(variation.fn_id, apply_transform(p, variation.transform));
+fn apply_xform(xform: XForm, p: vec2<f32>) -> vec2<f32> {
+  return apply_fn(xform.variation_id, apply_transform(p, xform.transform));
 }
 
 fn next(p: vec2<f32>) -> vec2<f32> {
   let i = random() % fractal.size;
-  return apply_variation(fractal.variations[i], p);
+  return apply_xform(fractal.xforms[i], p);
 }
 
 fn plot(v: vec2<f32>) {
@@ -574,19 +567,12 @@ const init = async (canvas, starts_running = true) => {
   const device = await adapter.requestDevice()
 
   const context = canvas.getContext('webgpu')
-
-  //const devicePixelRatio = window.devicePixelRatio || 1
-  //const presentationSize = [
-  //  canvas.clientWidth * devicePixelRatio,
-  //  canvas.clientHeight * devicePixelRatio
-  //]
-  const presentationSize = [canvas.width, canvas.height]
   const format = context.getPreferredFormat(adapter)
 
   context.configure({
     device,
     format: format,
-    size: presentationSize
+    size: [canvas.width, canvas.height]
   })
 
   const add_points_module = device.createShaderModule({
@@ -848,20 +834,38 @@ const init = async (canvas, starts_running = true) => {
   config.zoom = 1
 
   const fractal = new Fractal
-  //fractal.add({ fn_id: 'sinusoidal', a: 0.5, b:  0.0, c:  0.5, d:  0.0, e: 0.5, f:  0.5 })
-  //fractal.add({ fn_id: 'sinusoidal', a: 0.5, b:  0.0, c: -0.5, d:  0.0, e: 0.5, f:  0.5 })
-  //fractal.add({ fn_id: 'sinusoidal', a: 0.5, b:  0.0, c:  0.0, d:  0.0, e: 0.5, f: -0.5 })
-  //fractal.add({ fn_id: 'linear',     a: 0.0, b:  0.8, c:  0.0, d:  0.6, e: 0.0, f:  0.0 })
-  //fractal.add({ fn_id: 'linear',     a: 0.0, b: -0.8, c:  0.0, d: -0.6, e: 0.0, f:  0.0 })
-  fractal.add({ fn_id: 'eyefish', a:  0.321636, b: -0.204179, c: -0.633718, d:  0.204179, e:  0.321637, f:  1.140693 })
-  fractal.add({ fn_id: 'eyefish', a:  0.715673, b: -0.418864, c:  0.576108, d:  0.418864, e:  0.715673, f:  0.455125 })
-  fractal.add({ fn_id: 'eyefish', a: -0.212317, b:  0.536045, c:  0.53578,  d: -0.536045, e: -0.212317, f: -0.743179 })
-  fractal.add({ fn_id: 'linear',  a:  0.7,      b:  0.0,      c:  0.0,      d:  0.0,      e:  0.7,      f:  0.0      })
+  //fractal.add({ variation_id: 'sinusoidal', a: 0.5, b:  0.0, c:  0.5, d:  0.0, e: 0.5, f:  0.5 })
+  //fractal.add({ variation_id: 'sinusoidal', a: 0.5, b:  0.0, c: -0.5, d:  0.0, e: 0.5, f:  0.5 })
+  //fractal.add({ variation_id: 'sinusoidal', a: 0.5, b:  0.0, c:  0.0, d:  0.0, e: 0.5, f: -0.5 })
+  //fractal.add({ variation_id: 'linear',     a: 0.0, b:  0.8, c:  0.0, d:  0.6, e: 0.0, f:  0.0 })
+  //fractal.add({ variation_id: 'linear',     a: 0.0, b: -0.8, c:  0.0, d: -0.6, e: 0.0, f:  0.0 })
+  fractal.add({ variation: 'eyefish', a:  0.321636, b: -0.204179, c: -0.633718, d:  0.204179, e:  0.321637, f:  1.140693 })
+  fractal.add({ variation: 'eyefish', a:  0.715673, b: -0.418864, c:  0.576108, d:  0.418864, e:  0.715673, f:  0.455125 })
+  fractal.add({ variation: 'eyefish', a: -0.212317, b:  0.536045, c:  0.53578,  d: -0.536045, e: -0.212317, f: -0.743179 })
+  fractal.add({ variation: 'linear',  a:  0.7,      b:  0.0,      c:  0.0,      d:  0.0,      e:  0.7,      f:  0.0      })
 
   const primitives = new Primitives
 
-  class XFormTriangle {
-    constructor(xform, primitives, color) {
+  class XFormEditor {
+    constructor(xform, primitives, xform_list, color) {
+      const elem = document.createElement('xform-editor')
+      elem.setAttribute('variation', xform.variation)
+      elem.setAttribute('a', xform.a.toFixed(2))
+      elem.setAttribute('b', xform.b.toFixed(2))
+      elem.setAttribute('c', xform.c.toFixed(2))
+      elem.setAttribute('d', xform.d.toFixed(2))
+      elem.setAttribute('e', xform.e.toFixed(2))
+      elem.setAttribute('f', xform.f.toFixed(2))
+      elem.shadowRoot.querySelector('select').onchange = ev => {
+        this.xform.variation = ev.currentTarget.value
+        flam3.clear()
+      }
+      elem.shadowRoot.querySelector('button').onclick = ev => {
+        this.remove(fractal, primitives)
+      }
+      xform_list.appendChild(elem)
+      this.editor = elem
+
       const base_color = color
       const translucent_color = { ...base_color, a: base_color.a * 0.3 }
       const transparent_black = { r: 0.0, b: 0.0, g: 0.0, a: 0.0 }
@@ -974,39 +978,18 @@ const init = async (canvas, starts_running = true) => {
       if (this.currently_dragging === undefined) return false
       // Translate the whole thing
       if (this.currently_dragging === this.ring_00) {
-        this.xform.c = point.x
-        this.xform.f = point.y
-
-        const delta_x = point.x - this.ring_00.shape.x
-        const delta_y = point.y - this.ring_00.shape.y
-        const lines = [this.line_00_01, this.line_00_10, this.line_10_01]
-        const circles = [this.ring_01, this.hole_01, this.ring_10, this.hole_10, this.ring_00, this.hole_00]
-        for (const line of lines) {
-          line.shape.from_x += delta_x
-          line.shape.from_y += delta_y
-          line.shape.to_x   += delta_x
-          line.shape.to_y   += delta_y
-        }
-        for (const circle of circles) {
-          circle.shape.x += delta_x
-          circle.shape.y += delta_y
-        }
+        this.c = point.x
+        this.f = point.y
       }
       // Translate the (0, 1) point
       if (this.currently_dragging === this.ring_01) {
-        this.xform.b = point.x - this.xform.c
-        this.xform.e = point.y - this.xform.f
-
-        this.ring_01.shape.x = this.hole_01.shape.x = this.line_00_01.shape.to_x = this.line_10_01.shape.to_x = point.x
-        this.ring_01.shape.y = this.hole_01.shape.y = this.line_00_01.shape.to_y = this.line_10_01.shape.to_y = point.y
+        this.b = point.x - this.xform.c
+        this.e = point.y - this.xform.f
       }
       // Translate the (1, 0) point
       if (this.currently_dragging === this.ring_10) {
-        this.xform.a = point.x - this.xform.c
-        this.xform.d = point.y - this.xform.f
-
-        this.ring_10.shape.x = this.hole_10.shape.x = this.line_00_10.shape.to_x = this.line_10_01.shape.from_x = point.x
-        this.ring_10.shape.y = this.hole_10.shape.y = this.line_00_10.shape.to_y = this.line_10_01.shape.from_y = point.y
+        this.a = point.x - this.xform.c
+        this.d = point.y - this.xform.f
       }
       // Scale the triangle
       if (this.currently_dragging === this.line_10_01) {
@@ -1038,14 +1021,10 @@ const init = async (canvas, starts_running = true) => {
         const p01_prime = intersect(this.current_drag_data.line_00_01, A_to_P)
 
         if (isFinite(p10_prime.x) && isFinite(p10_prime.y) && isFinite(p01_prime.x) && isFinite(p01_prime.y)) {
-          this.ring_10.shape.x = this.hole_10.shape.x = this.line_00_10.shape.to_x = this.line_10_01.shape.from_x = p10_prime.x
-          this.ring_10.shape.y = this.hole_10.shape.y = this.line_00_10.shape.to_y = this.line_10_01.shape.from_y = p10_prime.y
-          this.ring_01.shape.x = this.hole_01.shape.x = this.line_00_01.shape.to_x = this.line_10_01.shape.to_x   = p01_prime.x
-          this.ring_01.shape.y = this.hole_01.shape.y = this.line_00_01.shape.to_y = this.line_10_01.shape.to_y   = p01_prime.y
-          this.xform.a = p10_prime.x - this.xform.c
-          this.xform.b = p01_prime.x - this.xform.c
-          this.xform.d = p10_prime.y - this.xform.f
-          this.xform.e = p01_prime.y - this.xform.f
+          this.a = p10_prime.x - this.xform.c
+          this.b = p01_prime.x - this.xform.c
+          this.d = p10_prime.y - this.xform.f
+          this.e = p01_prime.y - this.xform.f
         }
       }
       if (this.currently_dragging === this.line_00_01) {
@@ -1058,18 +1037,14 @@ const init = async (canvas, starts_running = true) => {
         const squared_length_p00_A  = p00_A_x  ** 2 + p00_A_y  ** 2
         const squared_length_p00_01 = p00_01_x ** 2 + p00_01_y ** 2
         const dot_product = p00_A_x * p00_01_x + p00_A_y * p00_01_y
-        const cos_alpha = dot_product / Math.sqrt(squared_length_p00_A * squared_length_p00_01)
+        const cos_alpha = clamp(dot_product / Math.sqrt(squared_length_p00_A * squared_length_p00_01), -1, 1)
         const sign = Math.sign(p00_01_x * p00_A_y - p00_A_x * p00_01_y)
         const alpha = Math.acos(cos_alpha)
         const sin_alpha = Math.sin(alpha) * sign
-        this.xform.a = cos_alpha * p00_10_x - sin_alpha * p00_10_y
-        this.xform.b = cos_alpha * p00_01_x - sin_alpha * p00_01_y
-        this.xform.d = sin_alpha * p00_10_x + cos_alpha * p00_10_y
-        this.xform.e = sin_alpha * p00_01_x + cos_alpha * p00_01_y
-        this.ring_10.shape.x = this.hole_10.shape.x = this.line_00_10.shape.to_x = this.line_10_01.shape.from_x = this.xform.a + this.xform.c
-        this.ring_10.shape.y = this.hole_10.shape.y = this.line_00_10.shape.to_y = this.line_10_01.shape.from_y = this.xform.d + this.xform.f
-        this.ring_01.shape.x = this.hole_01.shape.x = this.line_00_01.shape.to_x = this.line_10_01.shape.to_x   = this.xform.b + this.xform.c
-        this.ring_01.shape.y = this.hole_01.shape.y = this.line_00_01.shape.to_y = this.line_10_01.shape.to_y   = this.xform.e + this.xform.f
+        this.a = cos_alpha * p00_10_x - sin_alpha * p00_10_y
+        this.b = cos_alpha * p00_01_x - sin_alpha * p00_01_y
+        this.d = sin_alpha * p00_10_x + cos_alpha * p00_10_y
+        this.e = sin_alpha * p00_01_x + cos_alpha * p00_01_y
       }
       if (this.currently_dragging === this.line_00_10) {
         const p00_A_x  = point.x - this.ring_00.shape.x
@@ -1081,25 +1056,88 @@ const init = async (canvas, starts_running = true) => {
         const squared_length_p00_A  = p00_A_x  ** 2 + p00_A_y  ** 2
         const squared_length_p00_10 = p00_10_x ** 2 + p00_10_y ** 2
         const dot_product = p00_A_x * p00_10_x + p00_A_y * p00_10_y
-        const cos_alpha = dot_product / Math.sqrt(squared_length_p00_A * squared_length_p00_10)
+        const cos_alpha = clamp(dot_product / Math.sqrt(squared_length_p00_A * squared_length_p00_10), -1, 1)
         const sign = Math.sign(p00_10_x * p00_A_y - p00_A_x * p00_10_y)
         const alpha = Math.acos(cos_alpha)
         const sin_alpha = Math.sin(alpha) * sign
-        this.xform.a = cos_alpha * p00_10_x - sin_alpha * p00_10_y
-        this.xform.b = cos_alpha * p00_01_x - sin_alpha * p00_01_y
-        this.xform.d = sin_alpha * p00_10_x + cos_alpha * p00_10_y
-        this.xform.e = sin_alpha * p00_01_x + cos_alpha * p00_01_y
-        this.ring_10.shape.x = this.hole_10.shape.x = this.line_00_10.shape.to_x = this.line_10_01.shape.from_x = this.xform.a + this.xform.c
-        this.ring_10.shape.y = this.hole_10.shape.y = this.line_00_10.shape.to_y = this.line_10_01.shape.from_y = this.xform.d + this.xform.f
-        this.ring_01.shape.x = this.hole_01.shape.x = this.line_00_01.shape.to_x = this.line_10_01.shape.to_x   = this.xform.b + this.xform.c
-        this.ring_01.shape.y = this.hole_01.shape.y = this.line_00_01.shape.to_y = this.line_10_01.shape.to_y   = this.xform.e + this.xform.f
+        this.a = cos_alpha * p00_10_x - sin_alpha * p00_10_y
+        this.b = cos_alpha * p00_01_x - sin_alpha * p00_01_y
+        this.d = sin_alpha * p00_10_x + cos_alpha * p00_10_y
+        this.e = sin_alpha * p00_01_x + cos_alpha * p00_01_y
       }
       flam3.clear()
       return true
     }
+
+    set variation(value) {
+      this.xform.variation = value
+      this.editor.setAttribute('variation', value)
+    }
+    set a(value) {
+      this.xform.a = value
+      this.ring_10.shape.x = this.hole_10.shape.x = this.line_00_10.shape.to_x = this.line_10_01.shape.from_x = this.xform.a + this.xform.c
+      this.editor.setAttribute('a', value.toFixed(2))
+    }
+    set b(value) {
+      this.xform.b = value
+      this.editor.setAttribute('b', value.toFixed(2))
+      this.ring_01.shape.x = this.hole_01.shape.x = this.line_00_01.shape.to_x = this.line_10_01.shape.to_x   = this.xform.b + this.xform.c
+    }
+    set c(value) {
+      this.xform.c = value
+      this.editor.setAttribute('c', value.toFixed(2))
+      const delta_x = value - this.ring_00.shape.x
+      const lines = [this.line_00_01, this.line_00_10, this.line_10_01]
+      for (const line of lines) {
+        line.shape.from_x += delta_x
+        line.shape.to_x   += delta_x
+      }
+      const circles = [this.ring_01, this.hole_01, this.ring_10, this.hole_10, this.ring_00, this.hole_00]
+      for (const circle of circles) {
+        circle.shape.x += delta_x
+      }
+    }
+    set d(value) {
+      this.xform.d = value
+      this.editor.setAttribute('d', value.toFixed(2))
+      this.ring_10.shape.y = this.hole_10.shape.y = this.line_00_10.shape.to_y = this.line_10_01.shape.from_y = this.xform.d + this.xform.f
+    }
+    set e(value) {
+      this.xform.e = value
+      this.editor.setAttribute('e', value.toFixed(2))
+      this.ring_01.shape.y = this.hole_01.shape.y = this.line_00_01.shape.to_y = this.line_10_01.shape.to_y   = this.xform.e + this.xform.f
+    }
+    set f(value) {
+      this.xform.f = value
+      this.editor.setAttribute('f', value.toFixed(2))
+      const delta_y = value - this.ring_00.shape.y
+      const lines = [this.line_00_01, this.line_00_10, this.line_10_01]
+      for (const line of lines) {
+        line.shape.from_y += delta_y
+        line.shape.to_y   += delta_y
+      }
+      const circles = [this.ring_01, this.hole_01, this.ring_10, this.hole_10, this.ring_00, this.hole_00]
+      for (const circle of circles) {
+        circle.shape.y += delta_y
+      }
+    }
+
+    remove(fractal, primitives) {
+      primitives.colors.remove(this.line_00_10.color, this.hole_01.color)
+      primitives.lines.remove(this.line_00_10.shape, this.line_10_01.shape)
+      primitives.circles.remove(this.ring_00.shape, this.hole_01.shape)
+      primitives.remove(this.line_00_10, this.hole_01)
+      fractal.remove(this.xform)
+      this.editor.remove()
+      gui.splice(gui.findIndex(v => v === this), 1)
+      flam3.clear()
+    }
   }
 
-  const gui = fractal.map(xform => new XFormTriangle(xform, primitives, { r: 1.0, g: 0.4, b: 0.1, a: 1.0 }))
+  const xform_list = document.getElementById('xforms')
+  const gui = []
+  for (let i = 0; i < fractal.length; i++)
+    gui.push(new XFormEditor(fractal[i], primitives, xform_list, { r: 1.0, g: 0.4, b: 0.1, a: 1.0 }))
   gui.reverse()
 
   let running = starts_running
@@ -1120,8 +1158,8 @@ const init = async (canvas, starts_running = true) => {
       should_clear_histogram = false
     }
     ++config.frame
-    device.queue.writeBuffer(configBuffer,     0, config.buffer,     0)
-    device.queue.writeBuffer(fractalBuffer,    0, fractal.buffer,    0)
+    device.queue.writeBuffer(configBuffer,  0, config.buffer,  0)
+    device.queue.writeBuffer(fractalBuffer, 0, fractal.buffer, 0)
 
     // Add some points to the histogram
     with_encoder(commandEncoder => {
