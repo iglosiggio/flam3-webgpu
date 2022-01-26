@@ -10,6 +10,9 @@
 ///   3. Gather the maximum value
 ///   4. Plot on the log-density display
 
+// Import colourmaps generated from: https://github.com/tritoke/libcmap
+import cmaps from './colourmaps.js'
+
 class Config {
   buffer = new ArrayBuffer(24)
 
@@ -240,7 +243,44 @@ class Primitives extends StructWithFlexibleArrayElement {
 
   _length = new Uint32Array(this.buffer, 0, 1)
   get length()      { return this._length[0] }
-  set length(value) { return this._length[0] = value }
+  set length(value) { this._length[0] = value }
+}
+
+class CMap extends StructWithFlexibleArrayElement {
+  static BASE_SIZE = 4
+  static MAX_ELEMENTS = 1024
+  static Element = class Color {
+    static SIZE = 4
+    constructor(view) { this._view = view }
+
+    get view() { return this._view }
+    set view(value) {
+      this._view = value
+    }
+
+    get r() { return this.view.getUint8(0, true) }
+    get g() { return this.view.getUint8(1, true) }
+    get b() { return this.view.getUint8(2, true) }
+    set r(value) { this.view.setUint8(0, value, true) }
+    set g(value) { this.view.setUint8(1, value, true) }
+    set b(value) { this.view.setUint8(2, value, true) }
+  }
+
+  copyFrom(cmapUint8Array) {
+    if ((cmapUint8Array.length & 0x3) !== 0)
+      throw new Error('Length should be multiple of four')
+    const newLength = cmapUint8Array.length / 4
+    if (this.length > newLength)
+      this.length = newLength
+    while (this.length < newLength) this.add()
+    const srcArray = new Uint32Array(cmapUint8Array.buffer)
+    const dstArray = new Uint32Array(this.buffer, this.constructor.BASE_SIZE);
+    srcArray.forEach((v, i) => dstArray[i] = v)
+  }
+
+  _length = new Float32Array(this.buffer, 0, 1)
+  get length()      { return this._length[0] }
+  set length(value) { this._length[0] = value }
 }
 
 const common_code = `
@@ -277,6 +317,11 @@ struct AffineTransform {
   f: f32;
 };
 
+[[block]] struct CMap {
+  len: f32;
+  colors: array<u32>;
+};
+
 struct XForm {
   variation_id: u32;
   color: f32;
@@ -293,6 +338,7 @@ struct XForm {
 [[group(0), binding(0)]] var<storage, read> fragment_histogram: FragmentHistogram;
 [[group(0), binding(1)]] var<storage, read> fractal: Fractal;
 [[group(0), binding(2)]] var<uniform> config: CanvasConfiguration;
+[[group(0), binding(3)]] var<storage, read> cmap: CMap;
 
 // Adapted from: https://drafts.csswg.org/css-color-4/#color-conversion-code
 fn gam_sRGB(RGB: vec3<f32>) -> vec3<f32> {
@@ -403,9 +449,10 @@ fn plot(v: vec3<f32>) {
     );
     let offset = 4u * (ipoint.y * config.dimensions.x + ipoint.x);
 
-    let r = u32(255.0 * v.z);
-    let g = u32(255.0 * (1. - v.z));
-    let b = u32(  0.0 * v.z);
+    let color = cmap.colors[u32(round(v.z * (cmap.len - 1.0)))];
+    let r = (color >>  0u) & 0xFFu;
+    let g = (color >>  8u) & 0xFFu;
+    let b = (color >> 16u) & 0xFFu;
     atomicAdd(&stage1_histogram.data[offset + 0u], r);
     atomicAdd(&stage1_histogram.data[offset + 1u], g);
     atomicAdd(&stage1_histogram.data[offset + 2u], b);
@@ -646,6 +693,11 @@ const init = async (canvas, starts_running = true) => {
           binding: 2,
           visibility: GPUShaderStage.COMPUTE | GPUShaderStage.VERTEX | GPUShaderStage.FRAGMENT,
           buffer: { type: 'uniform' }
+        },
+        {
+          binding: 3,
+          visibility: GPUShaderStage.COMPUTE,
+          buffer: { type: 'storage' }
         }
       ]
   })
@@ -706,6 +758,11 @@ const init = async (canvas, starts_running = true) => {
     size: 24,
     usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST
   })
+  const cmapBuffer = device.createBuffer({
+    label: 'FLAM3 > Buffer > CMap',
+    size: CMap.SIZE,
+    usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST
+  })
 
   const fractalBindGroup = device.createBindGroup({
     label: 'FLAM3 > Group Binding > Fractal',
@@ -730,6 +787,13 @@ const init = async (canvas, starts_running = true) => {
         resource: {
           label: 'FLAM3 > Group Binding > Fractal > Configuration',
           buffer: configBuffer
+        }
+      },
+      {
+        binding: 3,
+        resource: {
+          label: 'FLAM3 > Group Binding > Fractal > CMap',
+          buffer: cmapBuffer
         }
       }
     ]
@@ -872,10 +936,19 @@ const init = async (canvas, starts_running = true) => {
   //fractal.add({ variation: 'sinusoidal', color: 0, a: 0.5, b:  0.0, c:  0.0, d:  0.0, e: 0.5, f: -0.5 })
   //fractal.add({ variation: 'linear',     color: 0, a: 0.0, b:  0.8, c:  0.0, d:  0.6, e: 0.0, f:  0.0 })
   //fractal.add({ variation: 'linear',     color: 0, a: 0.0, b: -0.8, c:  0.0, d: -0.6, e: 0.0, f:  0.0 })
-  fractal.add({ variation: 'eyefish', color: 0, a:  0.321636, b: -0.204179, c: -0.633718, d:  0.204179, e:  0.321637, f:  1.140693 })
-  fractal.add({ variation: 'eyefish', color: 0, a:  0.715673, b: -0.418864, c:  0.576108, d:  0.418864, e:  0.715673, f:  0.455125 })
-  fractal.add({ variation: 'eyefish', color: 1, a: -0.212317, b:  0.536045, c:  0.53578,  d: -0.536045, e: -0.212317, f: -0.743179 })
-  fractal.add({ variation: 'linear',  color: 1, a:  0.7,      b:  0.0,      c:  0.0,      d:  0.0,      e:  0.7,      f:  0.0      })
+
+  //fractal.add({ variation: 'eyefish', color: 0, a:  0.321636, b: -0.204179, c: -0.633718, d:  0.204179, e:  0.321637, f:  1.140693 })
+  //fractal.add({ variation: 'eyefish', color: 0, a:  0.715673, b: -0.418864, c:  0.576108, d:  0.418864, e:  0.715673, f:  0.455125 })
+  //fractal.add({ variation: 'eyefish', color: 1, a: -0.212317, b:  0.536045, c:  0.53578,  d: -0.536045, e: -0.212317, f: -0.743179 })
+  //fractal.add({ variation: 'linear',  color: 1, a:  0.7,      b:  0.0,      c:  0.0,      d:  0.0,      e:  0.7,      f:  0.0      })
+  fractal.add({ variation: 'linear', color: 0, a:  0.5, b: 0, c:    0, d: 0, e:  0.5, f: -0.5 })
+  fractal.add({ variation: 'linear', color: 0, a:  0.5, b: 0, c: -0.5, d: 0, e:  0.5, f:  0.5 })
+  fractal.add({ variation: 'linear', color: 1, a:  0.5, b: 0, c:  0.5, d: 0, e:  0.5, f:  0.5 })
+  fractal.add({ variation: 'linear', color: 0, a: -2,   b: 0, c:    0, d: 0, e: -2,   f:    0 })
+
+  const cmap = new CMap
+  cmap.copyFrom(cmaps.gnuplot)
+  device.queue.writeBuffer(cmapBuffer, 0, cmap.buffer)
 
   const primitives = new Primitives
 
