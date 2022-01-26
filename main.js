@@ -91,7 +91,7 @@ const VARIATION_ID_TO_STR_ENTRIES = [
 const VARIATION_ID_TO_STR = new Map(VARIATION_ID_TO_STR_ENTRIES)
 const STR_TO_VARIATION_ID = new Map(VARIATION_ID_TO_STR_ENTRIES.map(([a, b]) => [b, a]))
 class XForm {
-  static SIZE = 28
+  static SIZE = 32
   constructor(view) { this.view = view }
 
   get variation() {
@@ -107,18 +107,21 @@ class XForm {
     this.view.setUint32(0, id, true)
   }
 
-  get a()      { return this.view.getFloat32( 4, true) }
-  get b()      { return this.view.getFloat32( 8, true) }
-  get c()      { return this.view.getFloat32(12, true) }
-  get d()      { return this.view.getFloat32(16, true) }
-  get e()      { return this.view.getFloat32(20, true) }
-  get f()      { return this.view.getFloat32(24, true) }
-  set a(value) { this.view.setFloat32( 4, value, true) }
-  set b(value) { this.view.setFloat32( 8, value, true) }
-  set c(value) { this.view.setFloat32(12, value, true) }
-  set d(value) { this.view.setFloat32(16, value, true) }
-  set e(value) { this.view.setFloat32(20, value, true) }
-  set f(value) { this.view.setFloat32(24, value, true) }
+  get color() { return this.view.getFloat32(4, true) }
+  set color(value) { return this.view.setFloat32(4, value, true) }
+
+  get a()      { return this.view.getFloat32( 8, true) }
+  get b()      { return this.view.getFloat32(12, true) }
+  get c()      { return this.view.getFloat32(16, true) }
+  get d()      { return this.view.getFloat32(20, true) }
+  get e()      { return this.view.getFloat32(24, true) }
+  get f()      { return this.view.getFloat32(28, true) }
+  set a(value) { this.view.setFloat32( 8, value, true) }
+  set b(value) { this.view.setFloat32(12, value, true) }
+  set c(value) { this.view.setFloat32(16, value, true) }
+  set d(value) { this.view.setFloat32(20, value, true) }
+  set e(value) { this.view.setFloat32(24, value, true) }
+  set f(value) { this.view.setFloat32(28, value, true) }
 }
 
 class Fractal extends StructWithFlexibleArrayElement {
@@ -243,17 +246,18 @@ class Primitives extends StructWithFlexibleArrayElement {
 const common_code = `
 [[block]] struct Stage1Histogram {
   max: atomic<u32>;
+  padding1: u32; padding2: u32; padding3: u32;
   data: array<atomic<u32>>;
 };
 
 [[block]] struct Stage2Histogram {
   max: atomic<u32>;
-  data: array<u32>;
+  data: array<vec4<u32>>;
 };
 
 [[block]] struct FragmentHistogram {
   max: u32;
-  data: array<u32>;
+  data: array<vec4<u32>>;
 };
 
 [[block]] struct CanvasConfiguration {
@@ -275,6 +279,7 @@ struct AffineTransform {
 
 struct XForm {
   variation_id: u32;
+  color: f32;
   transform: AffineTransform;
 };
 
@@ -288,6 +293,22 @@ struct XForm {
 [[group(0), binding(0)]] var<storage, read> fragment_histogram: FragmentHistogram;
 [[group(0), binding(1)]] var<storage, read> fractal: Fractal;
 [[group(0), binding(2)]] var<uniform> config: CanvasConfiguration;
+
+// Adapted from: https://drafts.csswg.org/css-color-4/#color-conversion-code
+fn gam_sRGB(RGB: vec3<f32>) -> vec3<f32> {
+  // convert an array of linear-light sRGB values in the range 0.0-1.0
+  // to gamma corrected form
+  // https://en.wikipedia.org/wiki/SRGB
+  // Extended transfer function:
+  // For negative values, linear portion extends on reflection
+  // of axis, then uses reflected pow below that
+  let sign_per_channel = sign(RGB);
+  let abs_RGB = abs(RGB);
+  let non_linear_mask = abs_RGB > vec3<f32>(0.0031308);
+  let non_linear_RGB = sign_per_channel * (1.055 * pow(RGB, vec3<f32>(1./2.4)) - 0.055);
+  let linear_RGB = 12.92 * RGB;
+  return select(linear_RGB, non_linear_RGB, non_linear_mask);
+}
 
 // From: https://nullprogram.com/blog/2018/07/31/
 fn hash(v: u32) -> u32 {
@@ -365,20 +386,30 @@ fn apply_xform(xform: XForm, p: vec2<f32>) -> vec2<f32> {
   return apply_fn(xform.variation_id, apply_transform(p, xform.transform));
 }
 
-fn next(p: vec2<f32>) -> vec2<f32> {
+fn next(p: vec3<f32>) -> vec3<f32> {
   let i = random() % fractal.size;
-  return apply_xform(fractal.xforms[i], p);
+  let xform = fractal.xforms[i];
+  let next_p = apply_xform(xform, p.xy);
+  let next_c = (p.z + xform.color) / 2.0;
+  return vec3<f32>(next_p, next_c);
 }
 
-fn plot(v: vec2<f32>) {
-  let p = (v - config.origin) * config.zoom;
+fn plot(v: vec3<f32>) {
+  let p = (v.xy - config.origin) * config.zoom;
   if (-1. <= p.x && p.x < 1. && -1. <= p.y && p.y < 1.) {
     let ipoint = vec2<u32>(
       u32((p.x + 1.) / 2. * f32(config.dimensions.x)),
       u32((p.y + 1.) / 2. * f32(config.dimensions.y))
     );
-    let offset = ipoint.y * config.dimensions.x + ipoint.x;
-    atomicAdd(&stage1_histogram.data[offset], 1u);
+    let offset = 4u * (ipoint.y * config.dimensions.x + ipoint.x);
+
+    let r = u32(255.0 * v.z);
+    let g = u32(255.0 * (1. - v.z));
+    let b = u32(  0.0 * v.z);
+    atomicAdd(&stage1_histogram.data[offset + 0u], r);
+    atomicAdd(&stage1_histogram.data[offset + 1u], g);
+    atomicAdd(&stage1_histogram.data[offset + 2u], b);
+    atomicAdd(&stage1_histogram.data[offset + 3u], 1u);
   }
 }
 `
@@ -397,7 +428,7 @@ fn histogram_max(
   var invocation_max: u32 = 0x0u;
 
   for (var i = BLOCK_SIZE * invocation.x; i < ITERATION_SIZE; i = i + 1u) {
-    invocation_max = max(invocation_max, stage2_histogram.data[i]);
+    invocation_max = max(invocation_max, stage2_histogram.data[i].a);
   }
 
   atomicMax(&stage2_histogram.max, invocation_max);
@@ -412,9 +443,10 @@ fn add_points(
   [[builtin(global_invocation_id)]] invocation: vec3<u32>
 ) {
   seed(hash(config.frame) ^ hash(invocation.x));
-  var point = vec2<f32>(
+  var point = vec3<f32>(
     frandom() * 2. - 1.,
     frandom() * 2. - 1.,
+    frandom()
   );
 
   for (var i = 0; i < 20; i = i + 1) { point = next(point); }
@@ -449,10 +481,11 @@ fn fragment_main([[builtin(position)]] pos: vec4<f32>) -> [[location(0)]] vec4<f
     u32(pos.y)
   );
   let i = point.y * config.dimensions.y + point.x;
-  //return vec4<f32>(1.0, abs(sin(f32(fragment_histogram.data[i]) / 40000.0)), 0.0, 1.0);
-  let result = f32(fragment_histogram.data[i]);
-  let logresult = log(result)/log(f32(fragment_histogram.max));
-  return vec4<f32>(logresult, logresult, logresult, 1.0);
+  let values = vec4<f32>(fragment_histogram.data[i]);
+  let log_max_a = log(f32(fragment_histogram.max));
+  let color = values.rgb / 255.0 / values.a;
+  let alpha = log(values.a) / log_max_a;
+  return vec4<f32>(gam_sRGB(color.rgb) * alpha, 1.0);
 }
 `
 
@@ -652,7 +685,7 @@ const init = async (canvas, starts_running = true) => {
     bindGroupLayouts: [fractalBindGroupLayout, guiBindGroupLayout]
   })
 
-  const HISTOGRAM_BUFFER_SIZE = 4 + 4 * 900 * 900
+  const HISTOGRAM_BUFFER_SIZE = 4 + 3 * 4 + 4 * 4 * 900 * 900
   const histogramBuffer = device.createBuffer({
     label: 'FLAM3 > Buffer > Histogram',
     size: HISTOGRAM_BUFFER_SIZE,
@@ -834,15 +867,15 @@ const init = async (canvas, starts_running = true) => {
   config.zoom = 1
 
   const fractal = new Fractal
-  //fractal.add({ variation_id: 'sinusoidal', a: 0.5, b:  0.0, c:  0.5, d:  0.0, e: 0.5, f:  0.5 })
-  //fractal.add({ variation_id: 'sinusoidal', a: 0.5, b:  0.0, c: -0.5, d:  0.0, e: 0.5, f:  0.5 })
-  //fractal.add({ variation_id: 'sinusoidal', a: 0.5, b:  0.0, c:  0.0, d:  0.0, e: 0.5, f: -0.5 })
-  //fractal.add({ variation_id: 'linear',     a: 0.0, b:  0.8, c:  0.0, d:  0.6, e: 0.0, f:  0.0 })
-  //fractal.add({ variation_id: 'linear',     a: 0.0, b: -0.8, c:  0.0, d: -0.6, e: 0.0, f:  0.0 })
-  fractal.add({ variation: 'eyefish', a:  0.321636, b: -0.204179, c: -0.633718, d:  0.204179, e:  0.321637, f:  1.140693 })
-  fractal.add({ variation: 'eyefish', a:  0.715673, b: -0.418864, c:  0.576108, d:  0.418864, e:  0.715673, f:  0.455125 })
-  fractal.add({ variation: 'eyefish', a: -0.212317, b:  0.536045, c:  0.53578,  d: -0.536045, e: -0.212317, f: -0.743179 })
-  fractal.add({ variation: 'linear',  a:  0.7,      b:  0.0,      c:  0.0,      d:  0.0,      e:  0.7,      f:  0.0      })
+  //fractal.add({ variation: 'sinusoidal', color: 0, a: 0.5, b:  0.0, c:  0.5, d:  0.0, e: 0.5, f:  0.5 })
+  //fractal.add({ variation: 'sinusoidal', color: 0, a: 0.5, b:  0.0, c: -0.5, d:  0.0, e: 0.5, f:  0.5 })
+  //fractal.add({ variation: 'sinusoidal', color: 0, a: 0.5, b:  0.0, c:  0.0, d:  0.0, e: 0.5, f: -0.5 })
+  //fractal.add({ variation: 'linear',     color: 0, a: 0.0, b:  0.8, c:  0.0, d:  0.6, e: 0.0, f:  0.0 })
+  //fractal.add({ variation: 'linear',     color: 0, a: 0.0, b: -0.8, c:  0.0, d: -0.6, e: 0.0, f:  0.0 })
+  fractal.add({ variation: 'eyefish', color: 0, a:  0.321636, b: -0.204179, c: -0.633718, d:  0.204179, e:  0.321637, f:  1.140693 })
+  fractal.add({ variation: 'eyefish', color: 0, a:  0.715673, b: -0.418864, c:  0.576108, d:  0.418864, e:  0.715673, f:  0.455125 })
+  fractal.add({ variation: 'eyefish', color: 1, a: -0.212317, b:  0.536045, c:  0.53578,  d: -0.536045, e: -0.212317, f: -0.743179 })
+  fractal.add({ variation: 'linear',  color: 1, a:  0.7,      b:  0.0,      c:  0.0,      d:  0.0,      e:  0.7,      f:  0.0      })
 
   const primitives = new Primitives
 
