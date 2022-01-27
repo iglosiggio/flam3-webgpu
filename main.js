@@ -947,8 +947,6 @@ const init = async (canvas, starts_running = true) => {
   fractal.add({ variation: 'linear', color: 0, a: -2,   b: 0, c:    0, d: 0, e: -2,   f:    0 })
 
   const cmap = new CMap
-  cmap.copyFrom(cmaps.gnuplot)
-  device.queue.writeBuffer(cmapBuffer, 0, cmap.buffer)
 
   const primitives = new Primitives
 
@@ -1351,6 +1349,11 @@ const init = async (canvas, starts_running = true) => {
     fractal,
     config,
     get isRunning() { return running },
+    set cmap(value) {
+      cmap.copyFrom(cmaps[value])
+      device.queue.writeBuffer(cmapBuffer, 0, cmap.buffer)
+      flam3.clear()
+    },
     stop()  { running = false },
     start() { running = true; frame() },
     step()  { frame() },
@@ -1359,6 +1362,8 @@ const init = async (canvas, starts_running = true) => {
       should_clear_histogram = true
     }
   }
+  // Set default cmap
+  flam3.cmap = 'gnuplot'
 
   // BEGIN UI
   canvas.onwheel = ev => {
@@ -1416,4 +1421,15 @@ const init = async (canvas, starts_running = true) => {
 
 window.document.body.onload = async () => {
   window.flam3 = await init(document.getElementById('output'))
+
+  const cmap_selection = document.getElementById('flam3-cmap')
+  for (const cmap_name of Object.keys(cmaps)) {
+    const option = document.createElement('option')
+    option.textContent = cmap_name
+    cmap_selection.appendChild(option)
+  }
+  cmap_selection.value = 'gnuplot'
+  cmap_selection.onchange = ev => {
+    window.flam3.cmap = ev.currentTarget.value
+  }
 }
