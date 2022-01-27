@@ -66,6 +66,10 @@
     <body>
         <template id="xform-editor-template">
             <style>
+                .editor-element {
+                    display: block;
+                    margin-top: 0.2em;
+                }
                 .vector {
                     vertical-align: middle;
                     display: inline-block;
@@ -75,23 +79,29 @@
                     border-radius: 0.3em;
                 }
                 .affine-transform {
-                    display: block;
                     min-width: 200px;
-                    margin-top: 0.2em;
                 }
                 .vector td {
                     text-align: right;
                 }
+                .remove-button {
+                    text-align: center;
+                }
             </style>
-            <i>Variation:</i>
-            <select>
-                <option>linear</option>
-                <option>sinusoidal</option>
-                <option>julia</option>
-                <option>eyefish</option>
-            </select>
-            <button>Remove</button>
-            <div class="affine-transform">
+            <label class="editor-element">
+                <i>Variation:</i>
+                <select>
+                    <option>linear</option>
+                    <option>sinusoidal</option>
+                    <option>julia</option>
+                    <option>eyefish</option>
+                </select>
+            </label>
+            <label class="editor-element">
+                <i>Color:</i>
+                <input type="range" name="color" id="price" min="0" max="1" step="0.0001" value="0">
+            </label>
+            <div class="affine-transform editor-element">
                 <table class="vector">
                     <tr>
                         <td><slot name="a">a</slot></td>
@@ -111,6 +121,9 @@
                     <tr><td><slot name="c">c</slot></td></tr>
                     <tr><td><slot name="f">f</slot></td></tr>
                 </table>
+            </div>
+            <div class="editor-element remove-button">
+                <button>Remove</button>
             </div>
         </template>
         <main>
@@ -142,7 +155,7 @@
         <script type="text/javascript">
             customElements.define('xform-editor', class extends HTMLElement {
                 static get observedAttributes() {
-                    return ['variation', 'a', 'b', 'c', 'd', 'e', 'f']
+                    return ['variation', 'color', 'a', 'b', 'c', 'd', 'e', 'f']
                 }
                 constructor() {
                     super();
@@ -150,14 +163,15 @@
                                              .content;
                     this.attachShadow({mode: 'open'})
                         .appendChild(template.cloneNode(true));
-                    this.xform = undefined
                 }
                 attributeChangedCallback(name, oldValue, newValue) {
                     if (this.constructor.observedAttributes.includes(name))
-                        if (name !== 'variation')
-                            this.shadowRoot.querySelector(`slot[name="${name}"]`).textContent = newValue
-                        else
+                        if (name === 'variation')
                             this.shadowRoot.querySelector('select').value = newValue
+                        else if (name === 'color')
+                            this.shadowRoot.querySelector('input[name="color"]').value = newValue
+                        else
+                            this.shadowRoot.querySelector(`slot[name="${name}"]`).textContent = newValue
                     else
                         console.warn(`Unknown attribute ${name} changed from ${oldValue} to ${newValue}`)
                 }

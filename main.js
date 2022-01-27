@@ -962,8 +962,13 @@ const init = async (canvas, starts_running = true) => {
       elem.setAttribute('d', xform.d.toFixed(2))
       elem.setAttribute('e', xform.e.toFixed(2))
       elem.setAttribute('f', xform.f.toFixed(2))
+      elem.setAttribute('color', xform.color)
       elem.shadowRoot.querySelector('select').onchange = ev => {
         this.xform.variation = ev.currentTarget.value
+        flam3.clear()
+      }
+      elem.shadowRoot.querySelector('input[name="color"]').oninput = ev => {
+        this.xform.color = Number.parseFloat(ev.currentTarget.value)
         flam3.clear()
       }
       elem.shadowRoot.querySelector('button').onclick = ev => {
