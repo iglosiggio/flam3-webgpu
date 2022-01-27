@@ -137,113 +137,23 @@ class Fractal extends StructWithFlexibleArrayElement {
   set length(value) { return this._length[0] = value }
 }
 
-class Colors extends StructWithFlexibleArrayElement {
-  static BASE_SIZE = 0
-  static MAX_ELEMENTS = 256
-  static Element = class Color {
-    static SIZE = 16
-    constructor(view) { this.view = view }
-    get r() { return this.view.getFloat32( 0, true) }
-    get g() { return this.view.getFloat32( 4, true) }
-    get b() { return this.view.getFloat32( 8, true) }
-    get a() { return this.view.getFloat32(12, true) }
-    set r(value) { this.view.setFloat32( 0, value, true) }
-    set g(value) { this.view.setFloat32( 4, value, true) }
-    set b(value) { this.view.setFloat32( 8, value, true) }
-    set a(value) { this.view.setFloat32(12, value, true) }
-  }
+function in_circle(point, x, y, r) {
+  return (x - point.x) ** 2 + (y - point.y) ** 2 < (r / flam3.config.zoom) ** 2
 }
-class Circles extends StructWithFlexibleArrayElement {
-  static BASE_SIZE = 0
-  static MAX_ELEMENTS = 128
-  static Element = class Circle {
-    static SIZE = 16
-    constructor(view) { this.view = view }
-    get x() { return this.view.getFloat32(0, true) }
-    get y() { return this.view.getFloat32(4, true) }
-    get r() { return this.view.getFloat32(8, true) }
-    set x(value) { this.view.setFloat32(0, value, true) }
-    set y(value) { this.view.setFloat32(4, value, true) }
-    set r(value) { this.view.setFloat32(8, value, true) }
 
-    contains(point) {
-      return (this.x - point.x) ** 2 + (this.y - point.y) ** 2 < (this.r / flam3.config.zoom) ** 2
-    }
-  }
+function squared_distance_to_line(point, from_x, from_y, to_x, to_y) {
+  const pa_x = point.x   - from_x
+  const pa_y = point.y   - from_y
+  const ba_x = to_x - from_x
+  const ba_y = to_y - from_y
+  const unclamped_h = (pa_x * ba_x + pa_y * ba_y)
+                    / (ba_x **2 + ba_y ** 2)
+  const h = clamp(unclamped_h, 0, 1)
+  return (pa_x - ba_x * h) ** 2 + (pa_y - ba_y * h) ** 2
 }
-class Lines extends StructWithFlexibleArrayElement {
-  static BASE_SIZE = 0
-  static MAX_ELEMENTS = 128
-  static Element = class Line {
-    static SIZE = 24
-    constructor(view) { this.view = view }
-    get from_x() { return this.view.getFloat32( 0, true) }
-    get from_y() { return this.view.getFloat32( 4, true) }
-    get to_x()   { return this.view.getFloat32( 8, true) }
-    get to_y()   { return this.view.getFloat32(12, true) }
-    get width()  { return this.view.getFloat32(16, true) }
-    set from_x(value) { this.view.setFloat32( 0, value, true) }
-    set from_y(value) { this.view.setFloat32( 4, value, true) }
-    set to_x(value)   { this.view.setFloat32( 8, value, true) }
-    set to_y(value)   { this.view.setFloat32(12, value, true) }
-    set width(value)  { this.view.setFloat32(16, value, true) }
 
-    squared_distance_to(point) {
-      const pa_x = point.x   - this.from_x
-      const pa_y = point.y   - this.from_y
-      const ba_x = this.to_x - this.from_x
-      const ba_y = this.to_y - this.from_y
-      const unclamped_h = (pa_x * ba_x + pa_y * ba_y)
-                        / (ba_x **2 + ba_y ** 2)
-      const h = clamp(unclamped_h, 0, 1)
-      return (pa_x - ba_x * h) ** 2 + (pa_y - ba_y * h) ** 2
-    }
-
-    contains(point) {
-      return this.squared_distance_to(point) < (this.width * 4 / flam3.config.zoom) ** 2
-    }
-  }
-}
-class Primitives extends StructWithFlexibleArrayElement {
-  static BASE_SIZE = 4
-  static MAX_ELEMENTS = 256
-  static Element = class Primitive {
-    static SIZE = 4
-    constructor(view) { this._view = view }
-
-    get view() { return this._view }
-    set view(value) {
-      this._view = value
-      this.index = this.shape.view.byteOffset / this.shape.constructor.SIZE
-    }
-
-    get kind()  { return this.view.getUint16(0, true) }
-    get index() { return this.view.getUint16(2, true) }
-    set kind(value)  { this.view.setUint16(0, value, true) }
-    set index(value) { this.view.setUint16(2, value, true) }
-  }
-
-  constructor() {
-    super()
-    this.colors = new Colors
-    this.lines = new Lines
-    this.circles = new Circles
-  }
-
-  add(props) {
-    const { kind, color, shape } = props
-    const collection = kind === 0 ? this.lines : this.circles
-    return super.add({
-      kind,
-      index: collection.length,
-      color: this.colors.add(color),
-      shape: collection.add(shape)
-    })
-  }
-
-  _length = new Uint32Array(this.buffer, 0, 1)
-  get length()      { return this._length[0] }
-  set length(value) { this._length[0] = value }
+function in_line(point, from_x, from_y, to_x, to_y, width) {
+  return squared_distance_to_line(point, from_x, from_y, to_x, to_y) < (width * 4 / flam3.config.zoom) ** 2
 }
 
 class CMap extends StructWithFlexibleArrayElement {
@@ -380,6 +290,24 @@ fn random() -> u32 {
 
 fn frandom() -> f32 { return f32(random()) / 0xFFFFFFFF.0; }
 
+fn read_from_cmap(i: u32) -> vec3<u32> {
+  let color = cmap.colors[i];
+  let r = (color >>  0u) & 0xFFu;
+  let g = (color >>  8u) & 0xFFu;
+  let b = (color >> 16u) & 0xFFu;
+  return vec3<u32>(r, g, b);
+}
+
+fn sample_from_cmap(c: f32) -> vec3<f32> {
+  let float_index = c * (cmap.len - 1.0);
+  let index_down = u32(floor(float_index));
+  let index_up   = u32( ceil(float_index));
+  let bias = fract(float_index);
+  let color_down = vec3<f32>(read_from_cmap(index_down));
+  let color_up   = vec3<f32>(read_from_cmap(index_up));
+  return (color_down * (1.0 - bias) + color_up * bias) / 255.0;
+}
+
 fn apply_transform(p: vec2<f32>, transform: AffineTransform) -> vec2<f32> {
   return vec2<f32>(
     transform.a * p.x + transform.b * p.y + transform.c,
@@ -449,13 +377,11 @@ fn plot(v: vec3<f32>) {
     );
     let offset = 4u * (ipoint.y * config.dimensions.x + ipoint.x);
 
-    let color = cmap.colors[u32(round(v.z * (cmap.len - 1.0)))];
-    let r = (color >>  0u) & 0xFFu;
-    let g = (color >>  8u) & 0xFFu;
-    let b = (color >> 16u) & 0xFFu;
-    atomicAdd(&stage1_histogram.data[offset + 0u], r);
-    atomicAdd(&stage1_histogram.data[offset + 1u], g);
-    atomicAdd(&stage1_histogram.data[offset + 2u], b);
+    let color = sample_from_cmap(v.z);
+    let color_u32 = vec3<u32>(color * 255.0);
+    atomicAdd(&stage1_histogram.data[offset + 0u], color_u32.r);
+    atomicAdd(&stage1_histogram.data[offset + 1u], color_u32.g);
+    atomicAdd(&stage1_histogram.data[offset + 2u], color_u32.b);
     atomicAdd(&stage1_histogram.data[offset + 3u], 1u);
   }
 }
@@ -539,68 +465,41 @@ fn fragment_main([[builtin(position)]] pos: vec4<f32>) -> [[location(0)]] vec4<f
 const gui_fragment_wgsl = `
 ${common_code}
 
-let LINE_KIND = 0u;
-struct LinePrimitive {
-  from: vec2<f32>;
-  to: vec2<f32>;
-  width: f32;
-};
+fn in_line(p: vec2<f32>, from: vec2<f32>, to: vec2<f32>, width: f32) -> bool {
+  // src: https://iquilezles.org/www/articles/distfunctions2d/distfunctions2d.htm
+  let pa = p - from;
+  let ba = to - from;
+  let h = clamp(dot(pa, ba) / dot(ba, ba), 0.0, 1.0);
+  let dist = length(pa - ba * h);
+  return dist < width / config.zoom / 2.0;
+}
 
-let CIRCLE_KIND = 1u;
-struct CirclePrimitive {
-  center: vec2<f32>;
-  radius: f32;
-};
-
-[[block]] struct Primitives {
-  length: u32;
-  // The primitives are packed:
-  //  * lower 16 bits denote the kind
-  //  * higher 16 bits denote the index
-  data: array<u32>;
-};
-[[block]] struct Colors  { data: array<vec4<f32>>; };
-[[block]] struct Lines   { data: array<LinePrimitive>; };
-[[block]] struct Circles { data: array<CirclePrimitive>; };
-
-[[group(1), binding(0)]] var<storage, read> primitives: Primitives;
-[[group(1), binding(1)]] var<storage, read> colors: Colors;
-[[group(1), binding(2)]] var<storage, read> lines: Lines;
-[[group(1), binding(3)]] var<storage, read> circles: Circles;
+fn in_circle(p: vec2<f32>, center: vec2<f32>, radius: f32) -> bool {
+  return length(p - center) < radius / config.zoom;
+}
 
 [[stage(fragment)]]
 fn fragment_main([[builtin(position)]] screen_pos: vec4<f32>) -> [[location(0)]] vec4<f32> {
   let dimensions = vec2<f32>(config.dimensions);
-  let normal_pos = (screen_pos.xy / dimensions * 2.0 - vec2<f32>(1.0)) / config.zoom + config.origin;
-  var result = vec4<f32>(0.0); // Black (Transparent)
+  let p = (screen_pos.xy / dimensions * 2.0 - vec2<f32>(1.0)) / config.zoom + config.origin;
 
-  for (var i = 0u; i < primitives.length; i = i + 1u) {
-    let primitive = primitives.data[i];
-    let primitive_type = primitive & 0x0000FFFFu;
-    let primitive_index = primitive >> 16u;
-    let color = colors.data[i];
-    switch (primitive_type) {
-      // src: https://iquilezles.org/www/articles/distfunctions2d/distfunctions2d.htm
-      case 0u /* LINE_KIND */: {
-        let line = lines.data[primitive_index];
-        let pa = normal_pos - line.from;
-        let ba = line.to - line.from;
-        let h = clamp(dot(pa, ba) / dot(ba, ba), 0.0, 1.0);
-        let dist = length(pa - ba * h);
-        if (dist < line.width / config.zoom / 2.0) {
-          result = color;
-        }
-      }
-      case 1u /* CIRCLE_KIND */: {
-        let circle = circles.data[primitive_index];
-        if (length(normal_pos - circle.center) < circle.radius / config.zoom) {
-          result = color;
-        }
-      }
-      default: {}
+  for (var i = 0u; i < fractal.size; i = i + 1u) {
+    let color = fractal.xforms[i].color;
+    let xform = fractal.xforms[i].transform;
+    let p00 = vec2<f32>(xform.c, xform.f);
+    let p01 = vec2<f32>(xform.b, xform.e) + p00;
+    let p10 = vec2<f32>(xform.a, xform.d) + p00;
+    if (in_circle(p, p01, 0.03) || in_circle(p, p10, 0.03)) {
+      return vec4<f32>(0.0); // Black (Transparent)
+    }
+    if (in_circle(p, p00, 0.05)) {
+      return vec4<f32>(sample_from_cmap(color), 0.3); // XForm color (Translucent)
+    }
+    if (in_circle(p, p00, 0.06) || in_circle(p, p01, 0.04) || in_circle(p, p10, 0.04) || in_line(p, p00, p01, 0.01) || in_line(p, p00, p10, 0.01) || in_line(p, p10, p01, 0.01)) {
+      return vec4<f32>(sample_from_cmap(color), 1.0); // XForm color
     }
   }
-  return result;
+  return vec4<f32>(0.0); // Black (Transparent)
 }
 `
 
@@ -686,7 +585,7 @@ const init = async (canvas, starts_running = true) => {
         },
         {
           binding: 1,
-          visibility: GPUShaderStage.COMPUTE,
+          visibility: GPUShaderStage.COMPUTE | GPUShaderStage.FRAGMENT,
           buffer: { type: 'storage' }
         },
         {
@@ -696,7 +595,7 @@ const init = async (canvas, starts_running = true) => {
         },
         {
           binding: 3,
-          visibility: GPUShaderStage.COMPUTE,
+          visibility: GPUShaderStage.COMPUTE | GPUShaderStage.FRAGMENT,
           buffer: { type: 'storage' }
         }
       ]
@@ -799,62 +698,6 @@ const init = async (canvas, starts_running = true) => {
     ]
   })
 
-  const primitivesBuffer = device.createBuffer({
-    label: 'FLAM3 > Buffer > GUI > Primitives',
-    size: Primitives.SIZE,
-    usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST
-  })
-  const colorsBuffer = device.createBuffer({
-    label: 'FLAM3 > Buffer > GUI > Colors',
-    size: Colors.SIZE,
-    usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST
-  })
-  const linesBuffer = device.createBuffer({
-    label: 'FLAM3 > Buffer > GUI > Lines',
-    size: Lines.SIZE,
-    usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST
-  })
-  const circlesBuffer = device.createBuffer({
-    label: 'FLAM3 > Buffer > GUI > Circles',
-    size: Circles.SIZE,
-    usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST
-  })
-
-  const guiBindGroup = device.createBindGroup({
-    label: 'FLAM3 > Group Binding > GUI',
-    layout: guiBindGroupLayout,
-    entries: [
-      {
-        binding: 0,
-        resource: {
-          label: 'FLAM3 > Group Binding > GUI > Primitives',
-          buffer: primitivesBuffer
-        }
-      },
-      {
-        binding: 1,
-        resource: {
-          label: 'FLAM3 > Group Binding > GUI > Colors',
-          buffer: colorsBuffer
-        }
-      },
-      {
-        binding: 2,
-        resource: {
-          label: 'FLAM3 > Group Binding > GUI > Lines',
-          buffer: linesBuffer
-        }
-      },
-      {
-        binding: 3,
-        resource: {
-          label: 'FLAM3 > Group Binding > GUI > Circles',
-          buffer: circlesBuffer
-        }
-      },
-    ]
-  })
-
   const addPointsPipeline = await device.createComputePipelineAsync({
       label: 'FLAM3 > Pipeline > Add points',
       layout: fractalPipelineLayout,
@@ -895,14 +738,14 @@ const init = async (canvas, starts_running = true) => {
 
   const guiPipeline = await device.createRenderPipelineAsync({
     label: 'FLAM3 > Pipeline > GUI',
-    layout: guiPipelineLayout,
+    layout: fractalPipelineLayout,
     vertex: {
-      layout: guiPipelineLayout,
+      layout: fractalPipelineLayout,
       module: vertex_module,
       entryPoint: 'vertex_main',
     },
     fragment: {
-      layout: guiPipelineLayout,
+      layout: fractalPipelineLayout,
       module: gui_fragment_module,
       entryPoint: 'fragment_main',
       targets: [{
@@ -948,10 +791,8 @@ const init = async (canvas, starts_running = true) => {
 
   const cmap = new CMap
 
-  const primitives = new Primitives
-
   class XFormEditor {
-    constructor(xform, primitives, xform_list, color) {
+    constructor(xform, xform_list) {
       const elem = document.createElement('xform-editor')
       elem.setAttribute('variation', xform.variation)
       elem.setAttribute('a', xform.a.toFixed(2))
@@ -969,107 +810,31 @@ const init = async (canvas, starts_running = true) => {
         this.xform.color = Number.parseFloat(ev.currentTarget.value)
         flam3.clear()
       }
-      elem.shadowRoot.querySelector('button').onclick = ev => {
-        this.remove(fractal, primitives)
+      elem.shadowRoot.querySelector('button').onclick = _ => {
+        this.remove(fractal)
       }
       xform_list.appendChild(elem)
       this.editor = elem
 
-      const base_color = color
-      const translucent_color = { ...base_color, a: base_color.a * 0.3 }
-      const transparent_black = { r: 0.0, b: 0.0, g: 0.0, a: 0.0 }
-
       this.xform = xform
       this.current_drag_data = undefined
       this.currently_dragging = undefined
-
-      this.line_00_10 = primitives.add({
-        kind: 0,
-        color: base_color,
-        shape: {
-          width: 0.01,
-          from_x: xform.c,           from_y: xform.f,
-          to_x:   xform.a + xform.c, to_y:   xform.d + xform.f
-        }
-      })
-      this.line_00_01 = primitives.add({
-        kind: 0,
-        color: base_color,
-        shape: {
-          width: 0.01,
-          from_x: xform.c,           from_y: xform.f,
-          to_x:   xform.b + xform.c, to_y:   xform.e + xform.f
-        }
-      })
-      this.line_10_01 = primitives.add({
-        kind: 0,
-        color: base_color,
-        shape: {
-          width: 0.01,
-          from_x: xform.a + xform.c, from_y: xform.d + xform.f,
-          to_x:   xform.b + xform.c, to_y:   xform.e + xform.f
-        }
-      })
-      this.ring_00 = primitives.add({
-        kind: 1,
-        color: base_color,
-        shape: {
-          x: xform.c, y: xform.f,
-          r: 0.06
-        }
-      })
-      this.hole_00 = primitives.add({
-        kind: 1,
-        color: translucent_color,
-        shape: {
-          x: xform.c, y: xform.f,
-          r: 0.05
-        }
-      })
-      this.ring_10 = primitives.add({
-        kind: 1,
-        color: base_color,
-        shape: {
-          x: xform.a + xform.c, y: xform.d + xform.f,
-          r: 0.04
-        }
-      })
-      this.hole_10 = primitives.add({
-        kind: 1,
-        color: transparent_black,
-        shape: {
-          x: xform.a + xform.c, y: xform.d + xform.f,
-          r: 0.03
-        }
-      })
-      this.ring_01 = primitives.add({
-        kind: 1,
-        color: base_color,
-        shape: {
-          x: xform.b + xform.c, y: xform.e + xform.f,
-          r: 0.04
-        }
-      })
-      this.hole_01 = primitives.add({
-        kind: 1,
-        color: transparent_black,
-        shape: {
-          x: xform.b + xform.c, y: xform.e + xform.f,
-          r: 0.03
-        }
-      })
     }
 
     pointer_down(point) {
-      const draggable_elements = [this.ring_10, this.ring_01, this.ring_00, this.line_10_01, this.line_00_01, this.line_00_10]
-      this.currently_dragging = draggable_elements.find(elem => elem.shape.contains(point))
-      if (this.currently_dragging === this.line_10_01) {
-        const p10_x = this.line_10_01.shape.from_x
-        const p10_y = this.line_10_01.shape.from_y
-        const p01_x = this.line_10_01.shape.to_x
-        const p01_y = this.line_10_01.shape.to_y
-        const p00_x = this.ring_00.shape.x
-        const p00_y = this.ring_00.shape.y
+      const p00_x = this.xform.c
+      const p00_y = this.xform.f
+      const p01_x = this.xform.b + p00_x
+      const p01_y = this.xform.e + p00_y
+      const p10_x = this.xform.a + p00_x
+      const p10_y = this.xform.d + p00_y
+           if (in_circle(point, p00_x, p00_y, 0.06)) { this.currently_dragging = 'ring00' }
+      else if (in_circle(point, p01_x, p01_y, 0.04)) { this.currently_dragging = 'ring01' }
+      else if (in_circle(point, p10_x, p10_y, 0.04)) { this.currently_dragging = 'ring10' }
+      else if (in_line(point, p10_x, p10_y, p01_x, p01_y, 0.01)) { this.currently_dragging = 'line_10_01' }
+      else if (in_line(point, p00_x, p00_y, p01_x, p01_y, 0.01)) { this.currently_dragging = 'line_00_01' }
+      else if (in_line(point, p00_x, p00_y, p10_x, p10_y, 0.01)) { this.currently_dragging = 'line_00_10' }
+      if (this.currently_dragging === 'line_10_01') {
         this.current_drag_data = {
           // Cache the triangle shape so we can avoid divide-by-zero issues :)
           line_00_01: { from_x: p00_x, from_y: p00_y, to_x: p01_x, to_y: p01_y },
@@ -1085,23 +850,29 @@ const init = async (canvas, starts_running = true) => {
     }
     pointer_move(point) {
       if (this.currently_dragging === undefined) return false
+      const p00_x = this.xform.c
+      const p00_y = this.xform.f
+      const p01_x = this.xform.b + p00_x
+      const p01_y = this.xform.e + p00_y
+      const p10_x = this.xform.a + p00_x
+      const p10_y = this.xform.d + p00_y
       // Translate the whole thing
-      if (this.currently_dragging === this.ring_00) {
+      if (this.currently_dragging === 'ring00') {
         this.c = point.x
         this.f = point.y
       }
       // Translate the (0, 1) point
-      if (this.currently_dragging === this.ring_01) {
+      if (this.currently_dragging === 'ring01') {
         this.b = point.x - this.xform.c
         this.e = point.y - this.xform.f
       }
       // Translate the (1, 0) point
-      if (this.currently_dragging === this.ring_10) {
+      if (this.currently_dragging === 'ring10') {
         this.a = point.x - this.xform.c
         this.d = point.y - this.xform.f
       }
       // Scale the triangle
-      if (this.currently_dragging === this.line_10_01) {
+      if (this.currently_dragging === 'line_10_01') {
         //
         // 10'----A------------P-01'
         //  \     ^            ^ /
@@ -1136,13 +907,13 @@ const init = async (canvas, starts_running = true) => {
           this.e = p01_prime.y - this.xform.f
         }
       }
-      if (this.currently_dragging === this.line_00_01) {
-        const p00_A_x  = point.x - this.ring_00.shape.x
-        const p00_A_y  = point.y - this.ring_00.shape.y
-        const p00_01_x = this.ring_00.shape.x - this.ring_01.shape.x
-        const p00_01_y = this.ring_00.shape.y - this.ring_01.shape.y
-        const p00_10_x = this.ring_00.shape.x - this.ring_10.shape.x
-        const p00_10_y = this.ring_00.shape.y - this.ring_10.shape.y
+      if (this.currently_dragging === 'line_00_01') {
+        const p00_A_x  = point.x - p00_x
+        const p00_A_y  = point.y - p00_y
+        const p00_01_x = p00_x - p01_x
+        const p00_01_y = p00_y - p01_y
+        const p00_10_x = p00_x - p10_x
+        const p00_10_y = p00_y - p10_y
         const squared_length_p00_A  = p00_A_x  ** 2 + p00_A_y  ** 2
         const squared_length_p00_01 = p00_01_x ** 2 + p00_01_y ** 2
         const dot_product = p00_A_x * p00_01_x + p00_A_y * p00_01_y
@@ -1155,13 +926,13 @@ const init = async (canvas, starts_running = true) => {
         this.d = sin_alpha * p00_10_x + cos_alpha * p00_10_y
         this.e = sin_alpha * p00_01_x + cos_alpha * p00_01_y
       }
-      if (this.currently_dragging === this.line_00_10) {
-        const p00_A_x  = point.x - this.ring_00.shape.x
-        const p00_A_y  = point.y - this.ring_00.shape.y
-        const p00_01_x = this.ring_00.shape.x - this.ring_01.shape.x
-        const p00_01_y = this.ring_00.shape.y - this.ring_01.shape.y
-        const p00_10_x = this.ring_00.shape.x - this.ring_10.shape.x
-        const p00_10_y = this.ring_00.shape.y - this.ring_10.shape.y
+      if (this.currently_dragging === 'line_00_10') {
+        const p00_A_x  = point.x - p00_x
+        const p00_A_y  = point.y - p00_y
+        const p00_01_x = p00_x - p01_x
+        const p00_01_y = p00_y - p01_y
+        const p00_10_x = p00_x - p10_x
+        const p00_10_y = p00_y - p10_y
         const squared_length_p00_A  = p00_A_x  ** 2 + p00_A_y  ** 2
         const squared_length_p00_10 = p00_10_x ** 2 + p00_10_y ** 2
         const dot_product = p00_A_x * p00_10_x + p00_A_y * p00_10_y
@@ -1184,58 +955,30 @@ const init = async (canvas, starts_running = true) => {
     }
     set a(value) {
       this.xform.a = value
-      this.ring_10.shape.x = this.hole_10.shape.x = this.line_00_10.shape.to_x = this.line_10_01.shape.from_x = this.xform.a + this.xform.c
       this.editor.setAttribute('a', value.toFixed(2))
     }
     set b(value) {
       this.xform.b = value
       this.editor.setAttribute('b', value.toFixed(2))
-      this.ring_01.shape.x = this.hole_01.shape.x = this.line_00_01.shape.to_x = this.line_10_01.shape.to_x   = this.xform.b + this.xform.c
     }
     set c(value) {
       this.xform.c = value
       this.editor.setAttribute('c', value.toFixed(2))
-      const delta_x = value - this.ring_00.shape.x
-      const lines = [this.line_00_01, this.line_00_10, this.line_10_01]
-      for (const line of lines) {
-        line.shape.from_x += delta_x
-        line.shape.to_x   += delta_x
-      }
-      const circles = [this.ring_01, this.hole_01, this.ring_10, this.hole_10, this.ring_00, this.hole_00]
-      for (const circle of circles) {
-        circle.shape.x += delta_x
-      }
     }
     set d(value) {
       this.xform.d = value
       this.editor.setAttribute('d', value.toFixed(2))
-      this.ring_10.shape.y = this.hole_10.shape.y = this.line_00_10.shape.to_y = this.line_10_01.shape.from_y = this.xform.d + this.xform.f
     }
     set e(value) {
       this.xform.e = value
       this.editor.setAttribute('e', value.toFixed(2))
-      this.ring_01.shape.y = this.hole_01.shape.y = this.line_00_01.shape.to_y = this.line_10_01.shape.to_y   = this.xform.e + this.xform.f
     }
     set f(value) {
       this.xform.f = value
       this.editor.setAttribute('f', value.toFixed(2))
-      const delta_y = value - this.ring_00.shape.y
-      const lines = [this.line_00_01, this.line_00_10, this.line_10_01]
-      for (const line of lines) {
-        line.shape.from_y += delta_y
-        line.shape.to_y   += delta_y
-      }
-      const circles = [this.ring_01, this.hole_01, this.ring_10, this.hole_10, this.ring_00, this.hole_00]
-      for (const circle of circles) {
-        circle.shape.y += delta_y
-      }
     }
 
-    remove(fractal, primitives) {
-      primitives.colors.remove(this.line_00_10.color, this.hole_01.color)
-      primitives.lines.remove(this.line_00_10.shape, this.line_10_01.shape)
-      primitives.circles.remove(this.ring_00.shape, this.hole_01.shape)
-      primitives.remove(this.line_00_10, this.hole_01)
+    remove(fractal) {
       fractal.remove(this.xform)
       this.editor.remove()
       gui.splice(gui.findIndex(v => v === this), 1)
@@ -1246,11 +989,10 @@ const init = async (canvas, starts_running = true) => {
   const xform_list = document.getElementById('xforms')
   const gui = []
   for (let i = 0; i < fractal.length; i++)
-    gui.push(new XFormEditor(fractal[i], primitives, xform_list, { r: 1.0, g: 0.4, b: 0.1, a: 1.0 }))
-  gui.reverse()
+    gui.push(new XFormEditor(fractal[i], xform_list))
   document.getElementById('add-xform').onclick = () => {
-    const xform = fractal.add({ variation: 'linear', a: 1, b: 0, c: 0, d: 0, e: 1, f: 0 })
-    gui.splice(0, 0, new XFormEditor(xform, primitives, xform_list, { r: 1.0, g: 0.4, b: 0.1, a: 1.0 }))
+    const xform = fractal.add({ variation: 'linear', color: 0, a: 1, b: 0, c: 0, d: 0, e: 1, f: 0 })
+    gui.splice(0, 0, new XFormEditor(xform, xform_list))
   }
 
   let running = starts_running
@@ -1314,11 +1056,6 @@ const init = async (canvas, starts_running = true) => {
 
 
     if (flam3.gui) {
-      device.queue.writeBuffer(primitivesBuffer, 0, primitives.buffer,         0)
-      device.queue.writeBuffer(colorsBuffer,     0, primitives.colors.buffer,  0)
-      device.queue.writeBuffer(linesBuffer,      0, primitives.lines.buffer,   0)
-      device.queue.writeBuffer(circlesBuffer,    0, primitives.circles.buffer, 0)
-
       // Render the GUI
       with_encoder(commandEncoder => {
         const passEncoder = commandEncoder.beginRenderPass({
@@ -1330,7 +1067,6 @@ const init = async (canvas, starts_running = true) => {
           }]
         })
         passEncoder.setBindGroup(0, fractalBindGroup)
-        passEncoder.setBindGroup(1, guiBindGroup)
         passEncoder.setPipeline(guiPipeline)
         passEncoder.draw(4)
         passEncoder.endPass()
