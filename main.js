@@ -1156,6 +1156,14 @@ const init = async (canvas, starts_running = true) => {
 };
 
 window.document.body.onload = async () => {
+  const template = document.getElementById('xform-editor-template')
+  const variation_selector = template.content.querySelector('select[name="variation-selector"]')
+  for (const variation of STR_TO_VARIATION_ID.keys()) {
+    const option = document.createElement('option')
+    option.textContent = variation
+    variation_selector.appendChild(option)
+  }
+
   window.flam3 = await init(document.getElementById('output'))
 
   const cmap_selection = document.getElementById('flam3-cmap')
