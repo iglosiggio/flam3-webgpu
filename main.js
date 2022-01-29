@@ -86,10 +86,39 @@ class StructWithFlexibleArrayElement {
 }
 
 const VARIATION_ID_TO_STR_ENTRIES = [
-  [ 0, 'linear'],
-  [ 1, 'sinusoidal'],
-  [13, 'julia'],
-  [27, 'eyefish']
+  [ 0, 'Linear'],
+  [ 1, 'Sinusoidal'],
+  [ 2, 'Spherical'],
+  [ 3, 'Swirl'],
+  [ 4, 'Horseshoe'],
+  [ 5, 'Polar'],
+  //[ 6, 'Handkerchief'],
+  //[ 7, 'Heart'],
+  //[ 8, 'Disc'],
+  //[ 9, 'Spiral'],
+  //[10, 'Hyperbolic'],
+  //[11, 'Diamond'],
+  //[12, 'Ex'],
+  [13, 'Julia'],
+  //[14, 'Bent'],
+  //[16, 'Fisheye'],
+  //[18, 'Exponential'],
+  //[19, 'Power'],
+  //[20, 'Cosine'],
+  [27, 'Eyefish'],
+  //[28, 'Bubble'],
+  //[29, 'Cylinder'],
+  //[31, 'Noise'],
+  //[34, 'Blur'],
+  //[35, 'Gaussian'],
+  //[41, 'Arch'],
+  //[42, 'Tangent'],
+  //[43, 'Square'],
+  //[44, 'Rays'],
+  //[45, 'Blade'],
+  //[46, 'Secant'],
+  //[47, 'Twintrian'],
+  //[48, 'Cross'],
 ];
 const VARIATION_ID_TO_STR = new Map(VARIATION_ID_TO_STR_ENTRIES)
 const STR_TO_VARIATION_ID = new Map(VARIATION_ID_TO_STR_ENTRIES.map(([a, b]) => [b, a]))
@@ -317,17 +346,37 @@ fn apply_transform(p: vec2<f32>, transform: AffineTransform) -> vec2<f32> {
 
 let PI = 3.1415926535897932384626433;
 
-let LINEAR_FN = 0u;
 fn linear(p: vec2<f32>) -> vec2<f32> {
   return p;
 }
 
-let SINUSOIDAL_FN = 1u;
 fn sinusoidal(p: vec2<f32>) -> vec2<f32> {
   return vec2<f32>(sin(p.x), sin(p.y));
 }
 
-let JULIA_FN = 13u;
+fn spherical(p: vec2<f32>) -> vec2<f32> {
+  return p / dot(p, p);
+}
+
+fn swirl(p: vec2<f32>) -> vec2<f32> {
+  let r2 = dot(p, p);
+  let a = vec2<f32>(sin(r2), cos(r2));
+  let b = vec2<f32>(-cos(r2), sin(r2));
+  return p.x * a + p.y * b;
+}
+
+fn horseshoe(p: vec2<f32>) -> vec2<f32> {
+  let r = length(p);
+  return vec2<f32>(
+    (p.x - p.y) * (p.x + p.y),
+    2.0 * p.x * p.y
+  ) / r;
+}
+
+fn polar(p: vec2<f32>) -> vec2<f32> {
+  return vec2<f32>(atan2(p.x, p.y) / PI, length(p) - 1.0);
+}
+
 fn julia(p: vec2<f32>) -> vec2<f32> {
   let phi_over_two = atan2(p.x, p.y) / 2.0;
   let omega = f32((random() & 1u) == 0u) * PI;
@@ -338,7 +387,6 @@ fn julia(p: vec2<f32>) -> vec2<f32> {
   );
 }
 
-let EYEFISH_FN = 27u;
 fn eyefish(p: vec2<f32>) -> vec2<f32> {
   let v = 2.0 / (length(p) + 1.0);
   return v * p;
@@ -348,8 +396,12 @@ fn apply_fn(variation_id: u32, p: vec2<f32>) -> vec2<f32> {
   switch (variation_id) {
     case  0u: { return linear(p);     }
     case  1u: { return sinusoidal(p); }
-    case 13u: { return julia(p); }
-    case 27u: { return eyefish(p); }
+    case  2u: { return spherical(p);  }
+    case  3u: { return swirl(p);      }
+    case  4u: { return horseshoe(p);  }
+    case  5u: { return polar(p);      }
+    case 13u: { return julia(p);      }
+    case 27u: { return eyefish(p);    }
     default: {}
   }
   // Dumb and unreachable
@@ -774,20 +826,20 @@ const init = async (canvas, starts_running = true) => {
   config.zoom = 1
 
   const fractal = new Fractal
-  //fractal.add({ variation: 'sinusoidal', color: 0, a: 0.5, b:  0.0, c:  0.5, d:  0.0, e: 0.5, f:  0.5 })
-  //fractal.add({ variation: 'sinusoidal', color: 0, a: 0.5, b:  0.0, c: -0.5, d:  0.0, e: 0.5, f:  0.5 })
-  //fractal.add({ variation: 'sinusoidal', color: 0, a: 0.5, b:  0.0, c:  0.0, d:  0.0, e: 0.5, f: -0.5 })
-  //fractal.add({ variation: 'linear',     color: 0, a: 0.0, b:  0.8, c:  0.0, d:  0.6, e: 0.0, f:  0.0 })
-  //fractal.add({ variation: 'linear',     color: 0, a: 0.0, b: -0.8, c:  0.0, d: -0.6, e: 0.0, f:  0.0 })
+  //fractal.add({ variation: 'Sinusoidal', color: 0, a: 0.5, b:  0.0, c:  0.5, d:  0.0, e: 0.5, f:  0.5 })
+  //fractal.add({ variation: 'Sinusoidal', color: 0, a: 0.5, b:  0.0, c: -0.5, d:  0.0, e: 0.5, f:  0.5 })
+  //fractal.add({ variation: 'Sinusoidal', color: 0, a: 0.5, b:  0.0, c:  0.0, d:  0.0, e: 0.5, f: -0.5 })
+  //fractal.add({ variation: 'Linear',     color: 0, a: 0.0, b:  0.8, c:  0.0, d:  0.6, e: 0.0, f:  0.0 })
+  //fractal.add({ variation: 'Linear',     color: 0, a: 0.0, b: -0.8, c:  0.0, d: -0.6, e: 0.0, f:  0.0 })
 
-  //fractal.add({ variation: 'eyefish', color: 0, a:  0.321636, b: -0.204179, c: -0.633718, d:  0.204179, e:  0.321637, f:  1.140693 })
-  //fractal.add({ variation: 'eyefish', color: 0, a:  0.715673, b: -0.418864, c:  0.576108, d:  0.418864, e:  0.715673, f:  0.455125 })
-  //fractal.add({ variation: 'eyefish', color: 1, a: -0.212317, b:  0.536045, c:  0.53578,  d: -0.536045, e: -0.212317, f: -0.743179 })
-  //fractal.add({ variation: 'linear',  color: 1, a:  0.7,      b:  0.0,      c:  0.0,      d:  0.0,      e:  0.7,      f:  0.0      })
-  fractal.add({ variation: 'linear', color: 0, a:  0.5, b: 0, c:    0, d: 0, e:  0.5, f: -0.5 })
-  fractal.add({ variation: 'linear', color: 0, a:  0.5, b: 0, c: -0.5, d: 0, e:  0.5, f:  0.5 })
-  fractal.add({ variation: 'linear', color: 1, a:  0.5, b: 0, c:  0.5, d: 0, e:  0.5, f:  0.5 })
-  fractal.add({ variation: 'linear', color: 0, a: -2,   b: 0, c:    0, d: 0, e: -2,   f:    0 })
+  //fractal.add({ variation: 'Eyefish', color: 0, a:  0.321636, b: -0.204179, c: -0.633718, d:  0.204179, e:  0.321637, f:  1.140693 })
+  //fractal.add({ variation: 'Eyefish', color: 0, a:  0.715673, b: -0.418864, c:  0.576108, d:  0.418864, e:  0.715673, f:  0.455125 })
+  //fractal.add({ variation: 'Eyefish', color: 1, a: -0.212317, b:  0.536045, c:  0.53578,  d: -0.536045, e: -0.212317, f: -0.743179 })
+  //fractal.add({ variation: 'Linear',  color: 1, a:  0.7,      b:  0.0,      c:  0.0,      d:  0.0,      e:  0.7,      f:  0.0      })
+  fractal.add({ variation: 'Linear', color: 0, a:  0.5, b: 0, c:    0, d: 0, e:  0.5, f: -0.5 })
+  fractal.add({ variation: 'Linear', color: 0, a:  0.5, b: 0, c: -0.5, d: 0, e:  0.5, f:  0.5 })
+  fractal.add({ variation: 'Sinusoidal', color: 1, a:  0.5, b: 0, c:  0.5, d: 0, e:  0.5, f:  0.5 })
+  fractal.add({ variation: 'Linear', color: 0, a: -2,   b: 0, c:    0, d: 0, e: -2,   f:    0 })
 
   const cmap = new CMap
 
@@ -991,7 +1043,7 @@ const init = async (canvas, starts_running = true) => {
   for (let i = 0; i < fractal.length; i++)
     gui.push(new XFormEditor(fractal[i], xform_list))
   document.getElementById('add-xform').onclick = () => {
-    const xform = fractal.add({ variation: 'linear', color: 0, a: 1, b: 0, c: 0, d: 0, e: 1, f: 0 })
+    const xform = fractal.add({ variation: 'Linear', color: 0, a: 1, b: 0, c: 0, d: 0, e: 1, f: 0 })
     gui.splice(0, 0, new XFormEditor(xform, xform_list))
   }
 
