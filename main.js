@@ -92,8 +92,8 @@ const VARIATION_ID_TO_STR_ENTRIES = [
   [ 3, 'Swirl'],
   [ 4, 'Horseshoe'],
   [ 5, 'Polar'],
-  //[ 6, 'Handkerchief'],
-  //[ 7, 'Heart'],
+  [ 6, 'Handkerchief'],
+  [ 7, 'Heart'],
   //[ 8, 'Disc'],
   //[ 9, 'Spiral'],
   //[10, 'Hyperbolic'],
@@ -377,6 +377,18 @@ fn polar(p: vec2<f32>) -> vec2<f32> {
   return vec2<f32>(atan2(p.x, p.y) / PI, length(p) - 1.0);
 }
 
+fn handkerchief(p: vec2<f32>) -> vec2<f32> {
+  let theta = atan2(p.x, p.y);
+  let r = length(p);
+  return r * vec2<f32>(sin(theta + r), cos(theta - r));
+}
+
+fn heart(p: vec2<f32>) -> vec2<f32> {
+  let theta = atan2(p.x, p.y);
+  let r = length(p);
+  return r * vec2<f32>(sin(theta * r), -cos(theta * r));
+}
+
 fn julia(p: vec2<f32>) -> vec2<f32> {
   let phi_over_two = atan2(p.x, p.y) / 2.0;
   let omega = f32((random() & 1u) == 0u) * PI;
@@ -394,14 +406,16 @@ fn eyefish(p: vec2<f32>) -> vec2<f32> {
 
 fn apply_fn(variation_id: u32, p: vec2<f32>) -> vec2<f32> {
   switch (variation_id) {
-    case  0u: { return linear(p);     }
-    case  1u: { return sinusoidal(p); }
-    case  2u: { return spherical(p);  }
-    case  3u: { return swirl(p);      }
-    case  4u: { return horseshoe(p);  }
-    case  5u: { return polar(p);      }
-    case 13u: { return julia(p);      }
-    case 27u: { return eyefish(p);    }
+    case  0u: { return linear(p);       }
+    case  1u: { return sinusoidal(p);   }
+    case  2u: { return spherical(p);    }
+    case  3u: { return swirl(p);        }
+    case  4u: { return horseshoe(p);    }
+    case  5u: { return polar(p);        }
+    case  6u: { return handkerchief(p); }
+    case  7u: { return heart(p);        }
+    case 13u: { return julia(p);        }
+    case 27u: { return eyefish(p);      }
     default: {}
   }
   // Dumb and unreachable
