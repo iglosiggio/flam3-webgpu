@@ -94,11 +94,11 @@ const VARIATION_ID_TO_STR_ENTRIES = [
   [ 5, 'Polar'],
   [ 6, 'Handkerchief'],
   [ 7, 'Heart'],
-  //[ 8, 'Disc'],
-  //[ 9, 'Spiral'],
-  //[10, 'Hyperbolic'],
-  //[11, 'Diamond'],
-  //[12, 'Ex'],
+  [ 8, 'Disc'],
+  [ 9, 'Spiral'],
+  [10, 'Hyperbolic'],
+  [11, 'Diamond'],
+  [12, 'Ex'],
   [13, 'Julia'],
   //[14, 'Bent'],
   //[16, 'Fisheye'],
@@ -389,6 +389,47 @@ fn heart(p: vec2<f32>) -> vec2<f32> {
   return r * vec2<f32>(sin(theta * r), -cos(theta * r));
 }
 
+fn disc(p: vec2<f32>) -> vec2<f32> {
+  let theta = atan2(p.x, p.y);
+  let r = length(p);
+  let pi_r = PI * r;
+  return theta / PI * vec2<f32>(sin(pi_r), cos(pi_r));
+}
+
+fn spiral(p: vec2<f32>) -> vec2<f32> {
+  let theta = atan2(p.x, p.y);
+  let r = length(p);
+  return vec2<f32>(
+    cos(theta) + sin(r),
+    sin(theta) - cos(r)
+  ) / r;
+}
+
+fn hyperbolic(p: vec2<f32>) -> vec2<f32> {
+  let theta = atan2(p.x, p.y);
+  let r = length(p);
+  return vec2<f32>(sin(theta) / r, r * cos(theta));
+}
+
+fn diamond(p: vec2<f32>) -> vec2<f32> {
+  let theta = atan2(p.x, p.y);
+  let r = length(p);
+  return vec2<f32>(
+    sin(theta) * cos(r),
+    cos(theta) * sin(r)
+  );
+}
+
+fn ex(p: vec2<f32>) -> vec2<f32> {
+  let theta = atan2(p.x, p.y);
+  let r = length(p);
+  let p0 = sin(theta + r);
+  let p1 = cos(theta - r);
+  let p0_3 = p0 * p0 * p0;
+  let p1_3 = p1 * p1 * p1;
+  return r * vec2<f32>(p0_3 + p1_3, p0_3 - p1_3);
+}
+
 fn julia(p: vec2<f32>) -> vec2<f32> {
   let phi_over_two = atan2(p.x, p.y) / 2.0;
   let omega = f32((random() & 1u) == 0u) * PI;
@@ -414,6 +455,11 @@ fn apply_fn(variation_id: u32, p: vec2<f32>) -> vec2<f32> {
     case  5u: { return polar(p);        }
     case  6u: { return handkerchief(p); }
     case  7u: { return heart(p);        }
+    case  8u: { return disc(p);         }
+    case  9u: { return spiral(p);       }
+    case 10u: { return hyperbolic(p);   }
+    case 11u: { return diamond(p);      }
+    case 12u: { return ex(p);           }
     case 13u: { return julia(p);        }
     case 27u: { return eyefish(p);      }
     default: {}
