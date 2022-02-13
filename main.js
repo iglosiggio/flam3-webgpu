@@ -100,11 +100,11 @@ const VARIATION_ID_TO_STR_ENTRIES = [
   [11, 'Diamond'],
   [12, 'Ex'],
   [13, 'Julia'],
-  //[14, 'Bent'],
-  //[16, 'Fisheye'],
-  //[18, 'Exponential'],
-  //[19, 'Power'],
-  //[20, 'Cosine'],
+  [14, 'Bent'],
+  [16, 'Fisheye'],
+  [18, 'Exponential'],
+  [19, 'Power'],
+  [20, 'Cosine'],
   [27, 'Eyefish'],
   //[28, 'Bubble'],
   //[29, 'Cylinder'],
@@ -440,9 +440,42 @@ fn julia(p: vec2<f32>) -> vec2<f32> {
   );
 }
 
+fn bent(p: vec2<f32>) -> vec2<f32> {
+  if (p.x >= 0.0) {
+    if (p.y >= 0.0) {
+      return p;
+    }
+    return vec2<f32>(p.x, 0.5 * p.y);
+  }
+  if (p.y >= 0.0) {
+    return vec2<f32>(2.0 * p.x, p.y);
+  }
+  return vec2<f32>(2.0 * p.x, 0.5 * p.y);
+}
+
+fn fisheye(p: vec2<f32>) -> vec2<f32> {
+  return 2.0 / (length(p) + 1.0) * p.yx;
+}
+
+fn exponential(p: vec2<f32>) -> vec2<f32> {
+  return exp(p.x - 1.0) * vec2<f32>(cos(PI * p.y), sin(PI * p.y));
+}
+
+fn power(p: vec2<f32>) -> vec2<f32> {
+  let theta = atan2(p.x, p.y);
+  let r = length(p);
+  return pow(r, sin(theta)) * vec2<f32>(cos(theta), sin(theta));
+}
+
+fn cosine(p: vec2<f32>) -> vec2<f32> {
+  return vec2<f32>(
+     cos(PI * p.x) * cosh(p.y),
+    -sin(PI * p.x) * sinh(p.y)
+  );
+}
+
 fn eyefish(p: vec2<f32>) -> vec2<f32> {
-  let v = 2.0 / (length(p) + 1.0);
-  return v * p;
+  return 2.0 / (length(p) + 1.0) * p;
 }
 
 fn apply_fn(variation_id: u32, p: vec2<f32>) -> vec2<f32> {
@@ -461,6 +494,11 @@ fn apply_fn(variation_id: u32, p: vec2<f32>) -> vec2<f32> {
     case 11u: { return diamond(p);      }
     case 12u: { return ex(p);           }
     case 13u: { return julia(p);        }
+    case 14u: { return bent(p);         }
+    case 16u: { return fisheye(p);      }
+    case 18u: { return exponential(p);  }
+    case 19u: { return power(p);        }
+    case 20u: { return cosine(p);       }
     case 27u: { return eyefish(p);      }
     default: {}
   }
