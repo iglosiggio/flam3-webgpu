@@ -111,11 +111,11 @@ const VARIATION_ID_TO_STR_ENTRIES = [
   [31, 'Noise'],
   [34, 'Blur'],
   [35, 'Gaussian'],
-  //[41, 'Arch'],
-  //[42, 'Tangent'],
-  //[43, 'Square'],
-  //[44, 'Rays'],
-  //[45, 'Blade'],
+  [41, 'Arch'],
+  [42, 'Tangent'],
+  [43, 'Square'],
+  [44, 'Rays'],
+  [45, 'Blade'],
   //[46, 'Secant'],
   //[47, 'Twintrian'],
   //[48, 'Cross'],
@@ -505,6 +505,33 @@ fn gaussian(p: vec2<f32>) -> vec2<f32> {
   return phi_sum * vec2<f32>(cos(phi_5), sin(phi_5));
 }
 
+fn arch(p: vec2<f32>) -> vec2<f32> {
+  let phi = PI * frandom();
+  let sin_phi = sin(phi);
+  return vec2<f32>(sin_phi, sin_phi * sin_phi / cos(phi));
+}
+
+fn tangent(p: vec2<f32>) -> vec2<f32> {
+  return vec2<f32>(sin(p.x) / cos(p.y), tan(p.y));
+}
+
+fn square(p: vec2<f32>) -> vec2<f32> {
+  let phi_1 = frandom();
+  let phi_2 = frandom();
+  return vec2<f32>(phi_1 - 0.5, phi_2 - 0.5);
+}
+
+fn rays(p: vec2<f32>) -> vec2<f32> {
+  return tan(frandom() * PI) / dot(p, p) * vec2<f32>(cos(p.x), sin(p.y));
+}
+
+fn blade(p: vec2<f32>) -> vec2<f32> {
+  let phi = length(p) * frandom();
+  let cos_phi = cos(phi);
+  let sin_phi = sin(phi);
+  return p.x * vec2<f32>(cos_phi + sin_phi, cos_phi - sin_phi);
+}
+
 fn apply_fn(variation_id: u32, p: vec2<f32>) -> vec2<f32> {
   switch (variation_id) {
     case  0u: { return linear(p);       }
@@ -532,6 +559,11 @@ fn apply_fn(variation_id: u32, p: vec2<f32>) -> vec2<f32> {
     case 31u: { return noise(p);        }
     case 34u: { return blur(p);         }
     case 35u: { return gaussian(p);     }
+    case 41u: { return arch(p);         }
+    case 42u: { return tangent(p);      }
+    case 43u: { return square(p);       }
+    case 44u: { return rays(p);         }
+    case 45u: { return blade(p);        }
     default: {}
   }
   // Dumb and unreachable
