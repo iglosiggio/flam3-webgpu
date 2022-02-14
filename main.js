@@ -106,11 +106,11 @@ const VARIATION_ID_TO_STR_ENTRIES = [
   [19, 'Power'],
   [20, 'Cosine'],
   [27, 'Eyefish'],
-  //[28, 'Bubble'],
-  //[29, 'Cylinder'],
-  //[31, 'Noise'],
-  //[34, 'Blur'],
-  //[35, 'Gaussian'],
+  [28, 'Bubble'],
+  [29, 'Cylinder'],
+  [31, 'Noise'],
+  [34, 'Blur'],
+  [35, 'Gaussian'],
   //[41, 'Arch'],
   //[42, 'Tangent'],
   //[43, 'Square'],
@@ -478,6 +478,33 @@ fn eyefish(p: vec2<f32>) -> vec2<f32> {
   return 2.0 / (length(p) + 1.0) * p;
 }
 
+fn bubble(p: vec2<f32>) -> vec2<f32> {
+  return 4.0 / (dot(p, p) + 4.0) * p;
+}
+
+fn cylinder(p: vec2<f32>) -> vec2<f32> {
+  return vec2<f32>(sin(p.x), p.y);
+}
+
+fn noise(p: vec2<f32>) -> vec2<f32> {
+  let phi_1 = frandom();
+  let phi_2 = 2.0 * PI * frandom();
+  return phi_1 * p * vec2<f32>(cos(phi_2), sin(phi_2));
+}
+
+fn blur(p: vec2<f32>) -> vec2<f32> {
+  let phi_1 = frandom();
+  let phi_2 = 2.0 * PI * frandom();
+  return phi_1 * vec2<f32>(cos(phi_2), sin(phi_2));
+}
+
+fn gaussian(p: vec2<f32>) -> vec2<f32> {
+  // Summing 4 random numbers and subtracting 2 is an attempt at approximating a Gaussian distribution.
+  let phi_sum = frandom() + frandom() + frandom() + frandom() - 2.0;
+  let phi_5 = 2.0 * PI * frandom();
+  return phi_sum * vec2<f32>(cos(phi_5), sin(phi_5));
+}
+
 fn apply_fn(variation_id: u32, p: vec2<f32>) -> vec2<f32> {
   switch (variation_id) {
     case  0u: { return linear(p);       }
@@ -500,6 +527,11 @@ fn apply_fn(variation_id: u32, p: vec2<f32>) -> vec2<f32> {
     case 19u: { return power(p);        }
     case 20u: { return cosine(p);       }
     case 27u: { return eyefish(p);      }
+    case 28u: { return bubble(p);       }
+    case 29u: { return cylinder(p);     }
+    case 31u: { return noise(p);        }
+    case 34u: { return blur(p);         }
+    case 35u: { return gaussian(p);     }
     default: {}
   }
   // Dumb and unreachable
