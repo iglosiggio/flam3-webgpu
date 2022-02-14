@@ -116,9 +116,9 @@ const VARIATION_ID_TO_STR_ENTRIES = [
   [43, 'Square'],
   [44, 'Rays'],
   [45, 'Blade'],
-  //[46, 'Secant'],
-  //[47, 'Twintrian'],
-  //[48, 'Cross'],
+  [46, 'Secant'],
+  [47, 'Twintrian'],
+  [48, 'Cross'],
 ];
 const VARIATION_ID_TO_STR = new Map(VARIATION_ID_TO_STR_ENTRIES)
 const STR_TO_VARIATION_ID = new Map(VARIATION_ID_TO_STR_ENTRIES.map(([a, b]) => [b, a]))
@@ -532,6 +532,22 @@ fn blade(p: vec2<f32>) -> vec2<f32> {
   return p.x * vec2<f32>(cos_phi + sin_phi, cos_phi - sin_phi);
 }
 
+fn secant(p: vec2<f32>) -> vec2<f32> {
+  return vec2<f32>(p.x, 1.0 / cos(length(p)));
+}
+
+fn twintrian(p: vec2<f32>) -> vec2<f32> {
+  let phi_r = frandom() * length(p);
+  let sin_phi_r = sin(phi_r);
+  let t = log(sin_phi_r * sin_phi_r) / log(10.0) + cos(phi_r);
+  return p.x * vec2<f32>(t, t - PI * sin_phi_r);
+}
+
+fn _cross(p: vec2<f32>) -> vec2<f32> {
+  let v = p.x * p.x - p.y * p.y;
+  return sqrt(1.0 / v / v) * p;
+}
+
 fn apply_fn(variation_id: u32, p: vec2<f32>) -> vec2<f32> {
   switch (variation_id) {
     case  0u: { return linear(p);       }
@@ -564,6 +580,9 @@ fn apply_fn(variation_id: u32, p: vec2<f32>) -> vec2<f32> {
     case 43u: { return square(p);       }
     case 44u: { return rays(p);         }
     case 45u: { return blade(p);        }
+    case 46u: { return secant(p);       }
+    case 47u: { return twintrian(p);    }
+    case 48u: { return _cross(p);        }
     default: {}
   }
   // Dumb and unreachable
