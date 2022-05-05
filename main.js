@@ -831,7 +831,7 @@ const init = async (canvas, starts_running = true) => {
         {
           binding: 3,
           visibility: GPUShaderStage.COMPUTE | GPUShaderStage.FRAGMENT,
-          buffer: { type: 'storage' }
+          buffer: { type: 'read-only-storage' }
         }
       ]
   })
