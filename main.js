@@ -274,8 +274,10 @@ struct XForm {
 
 [[group(0), binding(0)]] var<storage, read_write> stage1_histogram: Stage1Histogram;
 [[group(0), binding(0)]] var<storage, read_write> stage2_histogram: Stage2Histogram;
-[[group(0), binding(0)]] var<storage, read> fragment_histogram: FragmentHistogram;
-[[group(0), binding(1)]] var<storage, read> fractal: Fractal;
+// FIXME: This should be read-only
+[[group(0), binding(0)]] var<storage, read_write> fragment_histogram: FragmentHistogram;
+// FIXME: This should be read-only
+[[group(0), binding(1)]] var<storage, read_write> fractal: Fractal;
 [[group(0), binding(2)]] var<uniform> config: CanvasConfiguration;
 [[group(0), binding(3)]] var<storage, read> cmap: CMap;
 
