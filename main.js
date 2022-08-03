@@ -223,63 +223,63 @@ class CMap extends StructWithFlexibleArrayElement {
 }
 
 const common_code = `
-[[block]] struct Stage1Histogram {
-  max: atomic<u32>;
-  padding1: u32; padding2: u32; padding3: u32;
-  data: array<atomic<u32>>;
+struct Stage1Histogram {
+  max: atomic<u32>,
+  padding1: u32, padding2: u32, padding3: u32,
+  data: array<atomic<u32>>,
 };
 
-[[block]] struct Stage2Histogram {
-  max: atomic<u32>;
-  data: array<vec4<u32>>;
+struct Stage2Histogram {
+  max: atomic<u32>,
+  data: array<vec4<u32>>,
 };
 
-[[block]] struct FragmentHistogram {
-  max: u32;
-  data: array<vec4<u32>>;
+struct FragmentHistogram {
+  max: u32,
+  data: array<vec4<u32>>,
 };
 
-[[block]] struct CanvasConfiguration {
-  origin: vec2<f32>;
-  dimensions: vec2<u32>;
-  frame: u32;
-  zoom: f32;
+struct CanvasConfiguration {
+  origin: vec2<f32>,
+  dimensions: vec2<u32>,
+  frame: u32,
+  zoom: f32,
 };
 
 // FIXME: Use a mat3x3
 struct AffineTransform {
-  a: f32;
-  b: f32;
-  c: f32;
-  d: f32;
-  e: f32;
-  f: f32;
+  a: f32,
+  b: f32,
+  c: f32,
+  d: f32,
+  e: f32,
+  f: f32,
 };
 
-[[block]] struct CMap {
-  len: f32;
-  colors: array<u32>;
+struct CMap {
+  len: f32,
+  colors: array<u32>,
 };
 
 struct XForm {
-  variation_id: u32;
-  color: f32;
-  transform: AffineTransform;
+  variation_id: u32,
+  color: f32,
+  transform: AffineTransform,
 };
 
-[[block]] struct Fractal {
-  size: u32;
-  xforms: array<XForm>;
+struct Fractal {
+  size: u32,
+  xforms: array<XForm>,
 };
 
-[[group(0), binding(0)]] var<storage, read_write> stage1_histogram: Stage1Histogram;
-[[group(0), binding(0)]] var<storage, read_write> stage2_histogram: Stage2Histogram;
+@group(0) @binding(0) var<storage, read_write> stage1_histogram: Stage1Histogram;
+@group(0) @binding(0) var<storage, read_write> stage2_histogram: Stage2Histogram;
 // FIXME: This should be read-only
-[[group(0), binding(0)]] var<storage, read_write> fragment_histogram: FragmentHistogram;
+@group(0) @binding(0) var<storage, read_write> fragment_histogram: FragmentHistogram;
 // FIXME: This should be read-only
-[[group(0), binding(1)]] var<storage, read_write> fractal: Fractal;
-[[group(0), binding(2)]] var<uniform> config: CanvasConfiguration;
-[[group(0), binding(3)]] var<storage, read> cmap: CMap;
+@group(0) @binding(1) var<storage, read_write> fractal: Fractal;
+@group(0) @binding(2) var<uniform> config: CanvasConfiguration;
+@group(0) @binding(3) var<storage, read> cmap: CMap;
 
 // Adapted from: https://drafts.csswg.org/css-color-4/#color-conversion-code
 fn gam_sRGB(RGB: vec3<f32>) -> vec3<f32> {
@@ -624,10 +624,10 @@ fn plot(v: vec3<f32>) {
 
 const histogram_max_wgsl = `
 ${common_code}
-[[stage(compute), workgroup_size(1)]]
+@compute @workgroup_size(1)
 fn histogram_max(
-  [[builtin(global_invocation_id)]] invocation: vec3<u32>,
-  [[builtin(num_workgroups)]] invocation_size: vec3<u32>
+  @builtin(global_invocation_id) invocation: vec3<u32>,
+  @builtin(num_workgroups) invocation_size: vec3<u32>
 ) {
   // We are only using 1D invocations for now so...
   let CANVAS_SIZE = config.dimensions.x * config.dimensions.y;
@@ -646,9 +646,9 @@ fn histogram_max(
 const add_points_wgsl = `
 ${common_code}
 // FIXME: Tune the workgroup size
-[[stage(compute), workgroup_size(1)]]
+@compute @workgroup_size(1)
 fn add_points(
-  [[builtin(global_invocation_id)]] invocation: vec3<u32>
+  @builtin(global_invocation_id) invocation: vec3<u32>
 ) {
   seed(hash(config.frame) ^ hash(invocation.x));
   var point = vec3<f32>(
@@ -666,8 +666,8 @@ fn add_points(
 `
 
 const vertex_wgsl =`
-[[stage(vertex)]]
-fn vertex_main([[builtin(vertex_index)]] VertexIndex : u32) -> [[builtin(position)]] vec4<f32> {
+@vertex
+fn vertex_main(@builtin(vertex_index) VertexIndex : u32) -> @builtin(position) vec4<f32> {
   var pos = array<vec2<f32>, 4>(  
     // Upper Triangle
     vec2<f32>( 1.,  1.),
@@ -682,8 +682,8 @@ fn vertex_main([[builtin(vertex_index)]] VertexIndex : u32) -> [[builtin(positio
 
 const histogram_fragment_wgsl = `
 ${common_code}
-[[stage(fragment)]]
-fn fragment_main([[builtin(position)]] pos: vec4<f32>) -> [[location(0)]] vec4<f32> {
+@fragment
+fn fragment_main(@builtin(position) pos: vec4<f32>) -> @location(0) vec4<f32> {
   let point = vec2<u32>(
     u32(pos.x),
     u32(pos.y)
@@ -713,8 +713,8 @@ fn in_circle(p: vec2<f32>, center: vec2<f32>, radius: f32) -> bool {
   return length(p - center) < radius / config.zoom;
 }
 
-[[stage(fragment)]]
-fn fragment_main([[builtin(position)]] screen_pos: vec4<f32>) -> [[location(0)]] vec4<f32> {
+@fragment
+fn fragment_main(@builtin(position) screen_pos: vec4<f32>) -> @location(0) vec4<f32> {
   let dimensions = vec2<f32>(config.dimensions);
   let p = (screen_pos.xy / dimensions * 2.0 - vec2<f32>(1.0)) / config.zoom + config.origin;
 
@@ -786,7 +786,8 @@ const init = async (canvas, starts_running = true) => {
   context.configure({
     device,
     format: format,
-    size: [canvas.width, canvas.height]
+    size: [canvas.width, canvas.height],
+    alphaMode: "premultiplied"
   })
 
   const add_points_module = device.createShaderModule({
