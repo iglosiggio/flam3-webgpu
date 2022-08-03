@@ -773,6 +773,7 @@ const init = async (canvas, starts_running = true) => {
     document.getElementById('webgpu-not-supported-error').style = ''
     return
   }
+  const format = navigator.gpu.getPreferredCanvasFormat()
   const adapter = await navigator.gpu.requestAdapter()
   if (adapter === null) {
     console.error('No WebGPU device is available')
@@ -781,12 +782,10 @@ const init = async (canvas, starts_running = true) => {
   const device = await adapter.requestDevice()
 
   const context = canvas.getContext('webgpu')
-  const format = context.getPreferredFormat(adapter)
 
   context.configure({
     device,
     format: format,
-    size: [canvas.width, canvas.height],
     alphaMode: "premultiplied"
   })
 
@@ -1259,8 +1258,8 @@ const init = async (canvas, starts_running = true) => {
       })
       passEncoder.setBindGroup(0, fractalBindGroup)
       passEncoder.setPipeline(addPointsPipeline)
-      passEncoder.dispatch(30000)
-      passEncoder.endPass()
+      passEncoder.dispatchWorkgroups(30000)
+      passEncoder.end()
     })
 
     // Find the max of the histogram
@@ -1270,8 +1269,8 @@ const init = async (canvas, starts_running = true) => {
       })
       passEncoder.setBindGroup(0, fractalBindGroup)
       passEncoder.setPipeline(histogramMaxPipeline)
-      passEncoder.dispatch(1000)
-      passEncoder.endPass()
+      passEncoder.dispatchWorkgroups(1000)
+      passEncoder.end()
     })
 
     // Render the histogram
@@ -1280,14 +1279,15 @@ const init = async (canvas, starts_running = true) => {
         label: 'FLAM3 > Pass > Render',
         colorAttachments: [{
           view: context.getCurrentTexture().createView(),
-          loadValue: { r: 0.0, g: 0.0, b: 0.0, a: 1.0 },
+          clearValue: { r: 0.0, g: 0.0, b: 0.0, a: 1.0 },
+          loadOp: 'clear',
           storeOp: 'store'
         }]
       })
       passEncoder.setBindGroup(0, fractalBindGroup)
       passEncoder.setPipeline(renderPipeline)
       passEncoder.draw(4)
-      passEncoder.endPass()
+      passEncoder.end()
     })
 
 
@@ -1298,14 +1298,14 @@ const init = async (canvas, starts_running = true) => {
           label: 'FLAM3 > Pass > GUI',
           colorAttachments: [{
             view: context.getCurrentTexture().createView(),
-            loadValue: 'load',
+            loadOp: 'load',
             storeOp: 'store'
           }]
         })
         passEncoder.setBindGroup(0, fractalBindGroup)
         passEncoder.setPipeline(guiPipeline)
         passEncoder.draw(4)
-        passEncoder.endPass()
+        passEncoder.end()
       })
     }
 
