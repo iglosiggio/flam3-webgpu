@@ -700,10 +700,10 @@ fn fragment_main(@builtin(position) pos: vec4<f32>) -> @location(0) vec4<f32> {
 const gui_fragment_wgsl = `
 ${common_code}
 
-fn in_line(p: vec2<f32>, from: vec2<f32>, to: vec2<f32>, width: f32) -> bool {
+fn in_line(p: vec2<f32>, _from: vec2<f32>, to: vec2<f32>, width: f32) -> bool {
   // src: https://iquilezles.org/www/articles/distfunctions2d/distfunctions2d.htm
-  let pa = p - from;
-  let ba = to - from;
+  let pa = p - _from;
+  let ba = to - _from;
   let h = clamp(dot(pa, ba) / dot(ba, ba), 0.0, 1.0);
   let dist = length(pa - ba * h);
   return dist < width / config.zoom / 2.0;
