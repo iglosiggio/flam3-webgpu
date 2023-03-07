@@ -346,7 +346,7 @@ fn apply_transform(p: vec2<f32>, transform: AffineTransform) -> vec2<f32> {
   );
 }
 
-let PI = 3.1415926535897932384626433;
+const PI = 3.1415926535897932384626433;
 
 fn linear(p: vec2<f32>) -> vec2<f32> {
   return p;
